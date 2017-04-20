@@ -6,7 +6,7 @@ public enum BBCodeError : Error {
     case internalError(String)
 }
 
-class BBCode {
+public class BBCode {
     /* EBNF
      <document> ::= <element> | <document> <element>
      <element> ::= <tag> | <content>
@@ -179,7 +179,7 @@ class BBCode {
     
     var currentNode: DOMNode
     
-    init() {
+    public init() {
         self.currentParser = Parser(parse: {_ in return nil})
         self.currentNode = DOMNode(tag: ("", .unknow, TagDescription(tagNeeded: false, Singular: false, subelts: nil, allowAttr: false, render: nil)), parent: nil)
         var tags: [TagInfo] = [

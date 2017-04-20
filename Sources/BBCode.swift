@@ -356,6 +356,14 @@ class BBCode {
             ("靈感", "haku-idea.png"),
             ("疑惑", "haku-confused.png"),
             ("警惕", "haku-guard.png"),
+            // Simplifyed Chinese
+            ("卖萌", "haku-cute.png"),
+            ("坏笑", "haku-smirk.png"),
+            ("惊讶", "haku-suprise.png"),
+            ("愤怒", "haku-anger.png"),
+            ("晕", "haku-dizzy.png"),
+            ("有爱", "haku-love.png"),
+            ("灵感", "haku-idea.png"),
             ]
         for emote in smilies {
             tags.append((emote.0, .smilies, TagDescription(tagNeeded: true, Singular: true, subelts: nil, allowAttr: false,

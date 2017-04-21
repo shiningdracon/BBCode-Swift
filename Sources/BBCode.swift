@@ -603,6 +603,9 @@ extension String {
     }
 
     public var isLink: Bool {
+    #if os(Linux)
+        return true //TODO
+    #else
         let types: NSTextCheckingResult.CheckingType = [.link]
         let detector = try? NSDataDetector(types: types.rawValue)
         guard (detector != nil && self.characters.count > 0) else { return false }
@@ -610,5 +613,6 @@ extension String {
             return true
         }
         return false
+    #endif
     }
 }

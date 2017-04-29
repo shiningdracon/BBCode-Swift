@@ -19,11 +19,11 @@ public class BBCode {
      <tag_end> ::= ']'
      <attr> ::= <character> | <attr> <character>
      <closing_tag> ::= <tag_start> '/' <tag_name> <tag_end>
-     <tag_name> ::= <letter> | <tag_name> <letter>
+     <tag_name> ::= <character_non-key> | <tag_name> <character_non-key_2>
      <content> ::= <character> | <content> <character>
-     <character> ::= utf8
-     <letter> ::= a-z|A-Z
-     <digit> ::= 0-9
+     <character> ::= unicode
+     <character_non-key> ::= unicode not including '[', '=', ']', '/'
+     <character_non-key_2> ::= <character_non-key> | '/'
      */
 
     
@@ -192,7 +192,7 @@ public class BBCode {
             ),
             ("quote", .quote,
              TagDescription(tagNeeded: true, Singular: false,
-                            subelts: [.bold, .italic, .underline, .delete, .header, .color, .image, .url, .quote],
+                            subelts: [.bold, .italic, .underline, .delete, .header, .color, .quote, .code, .hide, .url, .image, .flash, .user, .smilies],
                             allowAttr: true,
                             render: { n in
                                 var html: String
@@ -419,8 +419,7 @@ public class BBCode {
                     currentNode.children.removeLast()
                     return tag_close_parser
                 } else {
-//                    error = "unpaired closing tag"
-//                    return nil
+                    // illegal syntax, may be an unpaired closing tag, treat it as plain text
                     restoreNodeToPlain(node: newNode, c: c)
                     return content_parser
                 }
@@ -457,11 +456,10 @@ public class BBCode {
                 restoreNodeToPlain(node: newNode, c: c)
                 return content_parser
             } else if c == "[" {
-                // invalid syntax
+                // illegal syntax, treat it as plain text, and restart tag parsing from this new position
                 newNode.setTag(tag: tagManager.getInfo(type: .plain)!)
                 newNode.value.insert(Character(UnicodeScalar(91)), at: newNode.value.startIndex)
-                newNode.value.append(Character(c))
-                return content_parser
+                return tag_parser
             } else {
                 if index < tagNameMaxLength {
                     newNode.value.append(Character(c))
@@ -494,6 +492,7 @@ public class BBCode {
     }
 
     func tagClosingParser(g: inout USIterator) -> Parser? {
+        // <tag_name> <tag_end>
         var tagName: String = ""
         while let c = g.next() {
             if c == "]" {
@@ -507,11 +506,34 @@ public class BBCode {
                     currentNode = p
                     return content_parser
                 } else {
-                    // not paired tag
-                    error = "unparied tag"
-                    return nil
-                }
+                    if let subelts = currentNode.description?.subelts {
+                        if let tag = tagManager.getInfo(str: tagName) {
+                            if subelts.contains(tag.1) {
+                                // not paired tag
+                                error = "unparied tag"
+                                return nil
+                            }
+                        }
+                    }
 
+                    let newNode: DOMNode = newDOMNode(type: .plain, parent: currentNode)
+                    newNode.value = "[/" + tagName + "]"
+                    currentNode.children.append(newNode)
+
+                    return content_parser
+                }
+            } else if c == "[" {
+                // illegal syntax, treat it as plain text, and restart tag parsing from this new position
+                let newNode: DOMNode = newDOMNode(type: .plain, parent: currentNode)
+                newNode.value = "[/" + tagName
+                currentNode.children.append(newNode)
+                return tag_parser
+            } else if c == "=" {
+                // illegal syntax, treat it as plain text
+                let newNode: DOMNode = newDOMNode(type: .plain, parent: currentNode)
+                newNode.value = "[/" + tagName + "="
+                currentNode.children.append(newNode)
+                return content_parser
             } else {
                 tagName.append(Character(c))
             }

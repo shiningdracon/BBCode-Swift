@@ -1,17 +1,26 @@
 import Foundation
 
 public enum BBCodeError : Error {
-    case syntaxError(String)
-    case evaluationError(String)
     case internalError(String)
+    case unfinishedOpeningTag(String)
+    case unfinishedClosingTag(String)
+    case unfinishedAttr(String)
+    case unpairedTag(String)
+    case unclosedTag(String)
 
     public var description: String {
         switch self {
-        case .syntaxError(let msg):
-            return msg
-        case .evaluationError(let msg):
-            return msg
         case .internalError(let msg):
+            return msg
+        case .unfinishedOpeningTag(let msg):
+            return msg
+        case .unfinishedClosingTag(let msg):
+            return msg
+        case .unfinishedAttr(let msg):
+            return msg
+        case .unpairedTag(let msg):
+            return msg
+        case .unclosedTag(let msg):
             return msg
         }
     }
@@ -178,7 +187,7 @@ public class BBCode {
         }
     }
 
-    var error: String? = nil
+    var error: BBCodeError? = nil
 
     let tagManager: TagManager
     
@@ -484,7 +493,7 @@ public class BBCode {
             isFirst = false
         }
 
-        error = "Unfinished opening tag"
+        error = BBCodeError.unfinishedOpeningTag(unclosedTagDetail(unclosedNode: currentNode))
         return nil
     }
     
@@ -498,7 +507,7 @@ public class BBCode {
         }
 
         //unfinished attr
-        error = "Unfinished attr"
+        error = BBCodeError.unfinishedAttr(unclosedTagDetail(unclosedNode: currentNode))
         return nil
     }
 
@@ -511,7 +520,7 @@ public class BBCode {
                     currentNode.paired = true
                     guard let p = currentNode.parent else {
                         // should not happen
-                        error = "bug"
+                        error = BBCodeError.internalError("bug")
                         return nil
                     }
                     currentNode = p
@@ -521,7 +530,7 @@ public class BBCode {
                         if let tag = tagManager.getInfo(str: tagName) {
                             if subelts.contains(tag.1) {
                                 // not paired tag
-                                error = "Unparied tag"
+                                error = BBCodeError.unpairedTag(unclosedTagDetail(unclosedNode: currentNode))
                                 return nil
                             }
                         }
@@ -550,8 +559,7 @@ public class BBCode {
             }
         }
 
-        //
-        error = "Unfinished closing tag"
+        error = BBCodeError.unfinishedClosingTag(unclosedTagDetail(unclosedNode: currentNode))
         return nil
     }
     
@@ -596,7 +604,7 @@ public class BBCode {
         return text
     }
     
-    public func parse(bbcode: String, i18n: [String: Any]) throws -> String {
+    public func parse(bbcode: String) throws -> String {
         var g: USIterator = bbcode.unicodeScalars.makeIterator()
         self.content_parser = Parser(parse: contentParser)
         self.tag_parser = Parser(parse: tagParser)
@@ -611,13 +619,11 @@ public class BBCode {
         } while currentParser != nil
 
         if error != nil {
-            let detail = unclosedTagDetail(unclosedNode: currentNode)
-            throw BBCodeError.syntaxError((i18n[error!] as? String ?? error!) + (detail.isEmpty ? "" : (": " + detail)))
+            throw error!
         }
 
         if currentNode.type != .root {
-            let detail = unclosedTagDetail(unclosedNode: currentNode)
-            throw BBCodeError.evaluationError((i18n["Unclosed tag"] as? String ?? "Unclosed tag") + ": " + detail)
+            throw BBCodeError.unclosedTag(unclosedTagDetail(unclosedNode: currentNode))
         }
 
         return currentNode.renderChildren()

@@ -115,16 +115,7 @@ public class BBCode {
         init(tags: [TagInfo]) {
             var tmptags = tags
 
-            // Create .root description
-            let rootDescription = TagDescription(tagNeeded: false, Singular: false,
-                                    subelts: [],
-                                    allowAttr: false,
-                                    render: nil)
-            for tag in tags {
-                rootDescription.subelts?.append(tag.1)
-            }
 
-            tmptags.append(("", .root, rootDescription))
 
             tmptags.sort(by: {a, b in
                 if a.0.characters.count > b.0.characters.count {
@@ -370,6 +361,18 @@ public class BBCode {
                                                         render: { (n: DOMNode) in
                                                             return "<img src=\"/smilies/\(emote.1)\" alt=\"\" />" })))
         }
+
+        // Create .root description
+        let rootDescription = TagDescription(tagNeeded: false, Singular: false,
+                                             subelts: [],
+                                             allowAttr: false,
+                                             render: { n in
+                                                return n.renderChildren() })
+        for tag in tags {
+            rootDescription.subelts?.append(tag.1)
+        }
+        tags.append(("", .root, rootDescription))
+
         self.tagManager = TagManager(tags: tags);
     }
 
@@ -604,9 +607,9 @@ public class BBCode {
 
         if currentNode.type != .root {
             throw BBCodeError.unclosedTag(unclosedTagDetail(unclosedNode: currentNode))
+        } else {
+            return (currentNode.description!.render!(currentNode))
         }
-
-        return currentNode.renderChildren()
     }
 
 }
@@ -619,7 +622,7 @@ extension String {
         var g = self.unicodeScalars.makeIterator()
         var lastWasCR = false
         while let c = g.next() {
-            if c == UnicodeScalar(10) {
+            if c == UnicodeScalar(10) { // \n
                 if lastWasCR {
                     lastWasCR = false
                     ret.append("\n")
@@ -627,7 +630,7 @@ extension String {
                     ret.append("<br>\n")
                 }
                 continue
-            } else if c == UnicodeScalar(13) {
+            } else if c == UnicodeScalar(13) { // \r
                 lastWasCR = true
                 ret.append("<br>\r")
                 continue

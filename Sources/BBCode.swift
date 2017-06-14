@@ -87,23 +87,25 @@ public class BBCode {
 
     class TagDescription {
         var tagNeeded: Bool
-        var Singular: Bool
-        var subelts: [BBType]? // Allowed sub-elements of this element
+        var isSelfClosing: Bool
+        var allowedChildren: [BBType]? // Allowed sub-elements of this element
         var allowAttr: Bool
+        var isBlock: Bool
         var render: Render?
 
-        init(tagNeeded: Bool, Singular: Bool, subelts: [BBType]?, allowAttr: Bool, render: Render?) {
+        init(tagNeeded: Bool, isSelfClosing: Bool, allowedChildren: [BBType]?, allowAttr: Bool, isBlock: Bool, render: Render?) {
             self.tagNeeded = tagNeeded
-            self.Singular = Singular
-            self.subelts = subelts
+            self.isSelfClosing = isSelfClosing
+            self.allowedChildren = allowedChildren
             self.allowAttr = allowAttr
+            self.isBlock = isBlock
             self.render = render
         }
     }
 
     enum BBType: Int {
         case unknow = 0, root
-        case plain
+        case plain, br
         case quote, code, hide, url, image, flash, user
         case bold, italic, underline, delete, color, header
         case smilies // one to many
@@ -172,19 +174,29 @@ public class BBCode {
     
     public init() {
         self.currentParser = Parser(parse: {_ in return nil})
-        self.currentNode = DOMNode(tag: ("", .unknow, TagDescription(tagNeeded: false, Singular: false, subelts: nil, allowAttr: false, render: nil)), parent: nil)
+        self.currentNode = DOMNode(tag: ("", .unknow, TagDescription(tagNeeded: false, isSelfClosing: false, allowedChildren: nil, allowAttr: false, isBlock: false, render: nil)), parent: nil)
         var tags: [TagInfo] = [
             ("", .plain,
-             TagDescription(tagNeeded: false, Singular: false,
-                            subelts: nil,
+             TagDescription(tagNeeded: false, isSelfClosing: true,
+                            allowedChildren: nil,
                             allowAttr: false,
+                            isBlock: false,
                             render: { n in
-                                return n.escapedValue})
+                                return n.escapedValue })
+            ),
+            ("", .br,
+             TagDescription(tagNeeded: false, isSelfClosing: true,
+                            allowedChildren: nil,
+                            allowAttr: false,
+                            isBlock: false,
+                            render: { n in
+                                return "<br>" })
             ),
             ("quote", .quote,
-             TagDescription(tagNeeded: true, Singular: false,
-                            subelts: [.bold, .italic, .underline, .delete, .header, .color, .quote, .code, .hide, .url, .image, .flash, .user, .smilies],
+             TagDescription(tagNeeded: true, isSelfClosing: false,
+                            allowedChildren: [.bold, .italic, .underline, .delete, .header, .color, .quote, .code, .hide, .url, .image, .flash, .user, .smilies],
                             allowAttr: true,
+                            isBlock: true,
                             render: { n in
                                 var html: String
                                 if n.attr.isEmpty {
@@ -197,7 +209,7 @@ public class BBCode {
                                 return html })
             ),
             ("code", .code,
-             TagDescription(tagNeeded: true, Singular: false, subelts: nil, allowAttr: false,
+             TagDescription(tagNeeded: true, isSelfClosing: false, allowedChildren: nil, allowAttr: false, isBlock: true,
                             render: { n in
                                 var html = "<div class=\"codebox\"><pre><code>"
                                 html.append(n.renderChildren())
@@ -205,11 +217,11 @@ public class BBCode {
                                 return html })
             ),
             ("hide", .hide,
-             TagDescription(tagNeeded: true, Singular: false, subelts: nil, allowAttr: true,
+             TagDescription(tagNeeded: true, isSelfClosing: false, allowedChildren: nil, allowAttr: true, isBlock: true,
                             render: nil /*TODO*/)
             ),
             ("url", .url,
-             TagDescription(tagNeeded: true, Singular: false, subelts: nil, allowAttr: true,
+             TagDescription(tagNeeded: true, isSelfClosing: false, allowedChildren: nil, allowAttr: true, isBlock: false,
                             render: { n in
                                 var html: String
                                 var link: String
@@ -228,7 +240,7 @@ public class BBCode {
              })
             ),
             ("img", .image,
-             TagDescription(tagNeeded: true, Singular: false, subelts: nil, allowAttr: true,
+             TagDescription(tagNeeded: true, isSelfClosing: false, allowedChildren: nil, allowAttr: true, isBlock: false,
                             render: { n in
                                 var html: String
                                 let link: String = n.renderChildren()
@@ -250,7 +262,7 @@ public class BBCode {
              })
             ),
             ("user", .user,
-             TagDescription(tagNeeded: true, Singular: false, subelts: nil, allowAttr: true,
+             TagDescription(tagNeeded: true, isSelfClosing: false, allowedChildren: nil, allowAttr: true, isBlock: false,
                             render: { (n: DOMNode) in
                                 var userIdStr: String
                                 if n.attr.isEmpty {
@@ -271,7 +283,7 @@ public class BBCode {
              })
             ),
             ("b", .bold,
-             TagDescription(tagNeeded: true, Singular: false, subelts: [.italic, .delete, .underline], allowAttr: false,
+             TagDescription(tagNeeded: true, isSelfClosing: false, allowedChildren: [.italic, .delete, .underline, .url], allowAttr: false, isBlock: false,
                             render: { n in
                                 var html: String = "<b>"
                                 html.append(n.renderChildren())
@@ -279,7 +291,7 @@ public class BBCode {
                                 return html })
             ),
             ("i", .italic,
-             TagDescription(tagNeeded: true, Singular: false, subelts: [.bold, .delete, .underline], allowAttr: false,
+             TagDescription(tagNeeded: true, isSelfClosing: false, allowedChildren: [.bold, .delete, .underline, .url], allowAttr: false, isBlock: false,
                             render: { n in
                                 var html: String = "<i>"
                                 html.append(n.renderChildren())
@@ -287,7 +299,7 @@ public class BBCode {
                                 return html })
             ),
             ("u", .underline,
-             TagDescription(tagNeeded: true, Singular: false, subelts: [.bold, .italic, .delete], allowAttr: false,
+             TagDescription(tagNeeded: true, isSelfClosing: false, allowedChildren: [.bold, .italic, .delete, .url], allowAttr: false, isBlock: false,
                             render: { n in
                                 var html: String = "<u>"
                                 html.append(n.renderChildren())
@@ -295,7 +307,7 @@ public class BBCode {
                                 return html })
             ),
             ("d", .delete,
-             TagDescription(tagNeeded: true, Singular: false, subelts: [.bold, .italic, .underline], allowAttr: false,
+             TagDescription(tagNeeded: true, isSelfClosing: false, allowedChildren: [.bold, .italic, .underline, .url], allowAttr: false, isBlock: false,
                             render: { n in
                                 var html: String = "<del>"
                                 html.append(n.renderChildren())
@@ -303,7 +315,7 @@ public class BBCode {
                                 return html })
             ),
             ("color", .color,
-             TagDescription(tagNeeded: true, Singular: false, subelts: [.bold, .italic, .underline], allowAttr: true,
+             TagDescription(tagNeeded: true, isSelfClosing: false, allowedChildren: [.bold, .italic, .underline], allowAttr: true, isBlock: false,
                             render: { n in
                                 var html: String
                                 if n.attr.isEmpty {
@@ -315,7 +327,7 @@ public class BBCode {
                                 return html })
             ),
             ("h", .header,
-             TagDescription(tagNeeded: true, Singular: false, subelts: [.bold, .italic, .underline], allowAttr: false,
+             TagDescription(tagNeeded: true, isSelfClosing: false, allowedChildren: [.bold, .italic, .underline, .delete, .url], allowAttr: false, isBlock: false,
                             render: { n in
                                 var html: String = "<h5>"
                                 html.append(n.renderChildren())
@@ -357,19 +369,19 @@ public class BBCode {
             ("灵感", "haku-idea.png"),
             ]
         for emote in smilies {
-            tags.append((emote.0, .smilies, TagDescription(tagNeeded: true, Singular: true, subelts: nil, allowAttr: false,
+            tags.append((emote.0, .smilies, TagDescription(tagNeeded: true, isSelfClosing: true, allowedChildren: nil, allowAttr: false, isBlock: false,
                                                         render: { (n: DOMNode) in
                                                             return "<img src=\"/smilies/\(emote.1)\" alt=\"\" />" })))
         }
 
         // Create .root description
-        let rootDescription = TagDescription(tagNeeded: false, Singular: false,
-                                             subelts: [],
-                                             allowAttr: false,
+        let rootDescription = TagDescription(tagNeeded: false, isSelfClosing: false,
+                                             allowedChildren: [],
+                                             allowAttr: false, isBlock: false,
                                              render: { n in
                                                 return n.renderChildren() })
         for tag in tags {
-            rootDescription.subelts?.append(tag.1)
+            rootDescription.allowedChildren?.append(tag.1)
         }
         tags.append(("", .root, rootDescription))
 
@@ -380,27 +392,53 @@ public class BBCode {
         if let tag = tagManager.getInfo(type: type) {
             return DOMNode(tag: tag, parent: parent)
         } else {
-            return DOMNode(tag: ("", .unknow, TagDescription(tagNeeded: false, Singular: false, subelts: nil, allowAttr: false, render: nil)), parent: parent)
+            return DOMNode(tag: ("", .unknow, TagDescription(tagNeeded: false, isSelfClosing: false, allowedChildren: nil, allowAttr: false, isBlock: false, render: nil)), parent: parent)
         }
     }
     
     func contentParser(g: inout USIterator) -> Parser? {
-        let newNode: DOMNode = newDOMNode(type: .plain, parent: currentNode)
+        var newNode: DOMNode = newDOMNode(type: .plain, parent: currentNode)
         currentNode.children.append(newNode)
+        var lastWasCR = false
         while let c = g.next() {
-            if c == "[" { // <tag_start>
-                if currentNode.description?.subelts != nil {
+            if c == UnicodeScalar(10) { // \n
+                if lastWasCR {
+                    lastWasCR = false
+                } else {
                     if newNode.value.isEmpty {
                         currentNode.children.removeLast()
                     }
-                    return tag_parser
-                } else if !currentNode.paired {
-                    return tag_parser
-                } else {
+                    newNode = newDOMNode(type: .br, parent: currentNode)
+                    currentNode.children.append(newNode)
+                    newNode = newDOMNode(type: .plain, parent: currentNode)
+                    currentNode.children.append(newNode)
+                }
+            } else if c == UnicodeScalar(13) { // \r
+                lastWasCR = true
+                if newNode.value.isEmpty {
+                    currentNode.children.removeLast()
+                }
+                newNode = newDOMNode(type: .br, parent: currentNode)
+                currentNode.children.append(newNode)
+                newNode = newDOMNode(type: .plain, parent: currentNode)
+                currentNode.children.append(newNode)
+            } else {
+                lastWasCR = false
+
+                if c == "[" { // <tag_start>
+                    if currentNode.description?.allowedChildren != nil {
+                        if newNode.value.isEmpty {
+                            currentNode.children.removeLast()
+                        }
+                        return tag_parser
+                    } else if !currentNode.paired {
+                        return tag_parser
+                    } else {
+                        newNode.value.append(Character(c))
+                    }
+                } else { // <content>
                     newNode.value.append(Character(c))
                 }
-            } else { // <content>
-                newNode.value.append(Character(c))
             }
         }
 
@@ -430,9 +468,9 @@ public class BBCode {
                 //<opening_tag_2> ::= <tag_prefix> '=' <attr> <tag_end>
                 if let tag = tagManager.getInfo(str: newNode.value) {
                     newNode.setTag(tag: tag)
-                    if let subelts = currentNode.description?.subelts, subelts.contains(newNode.type) {
+                    if let allowedChildren = currentNode.description?.allowedChildren, allowedChildren.contains(newNode.type) {
                         if (newNode.description?.allowAttr)! {
-                            newNode.paired = false //singular tag has no attr, so its must be not paired
+                            newNode.paired = false //isSelfClosing tag has no attr, so its must be not paired
                             currentNode = newNode
                             return attr_parser
                         }
@@ -444,8 +482,8 @@ public class BBCode {
                 //<tag> ::= <opening_tag_1> | <opening_tag> <content> <closing_tag>
                 if let tag = tagManager.getInfo(str: newNode.value) {
                     newNode.setTag(tag: tag)
-                    if let subelts = currentNode.description?.subelts, subelts.contains(newNode.type) {
-                        if (newNode.description?.Singular)! {
+                    if let allowedChildren = currentNode.description?.allowedChildren, allowedChildren.contains(newNode.type) {
+                        if (newNode.description?.isSelfClosing)! {
                             //<opening_tag_1> ::= <tag_prefix> <tag_end>
                             return content_parser
                         } else {
@@ -484,6 +522,9 @@ public class BBCode {
         while let c = g.next() {
             if c == "]" {
                 return content_parser
+            } else if c == UnicodeScalar(10) || c == UnicodeScalar(13) {
+                error = BBCodeError.unfinishedAttr(unclosedTagDetail(unclosedNode: currentNode))
+                return nil
             } else {
                 currentNode.attr.append(Character(c))
             }
@@ -509,9 +550,9 @@ public class BBCode {
                     currentNode = p
                     return content_parser
                 } else {
-                    if let subelts = currentNode.description?.subelts {
+                    if let allowedChildren = currentNode.description?.allowedChildren {
                         if let tag = tagManager.getInfo(str: tagName) {
-                            if subelts.contains(tag.1) {
+                            if allowedChildren.contains(tag.1) {
                                 // not paired tag
                                 error = BBCodeError.unpairedTag(unclosedTagDetail(unclosedNode: currentNode))
                                 return nil
@@ -552,25 +593,43 @@ public class BBCode {
         node.value.append(Character(c))
     }
 
-    // Called by unclosedTagDetail
-    func nodeContext(node: DOMNode) -> String {
-        if node.type == .root {
-            // should not be here
-            return ""
-        } else if node.type == .plain {
-            return node.value
-        } else {
-            if let desc = node.description, desc.Singular {
-                return "[" + node.value + "]"
-            } else {
-                var text: String = "[" + node.value + (node.attr.isEmpty ? "]" : "=" + node.attr + "]")
-                for child in node.children {
-                    text = text + nodeContext(node: child)
-                }
-                text = text + "[/" + node.value + "]"
+    func handleNewlineAndParagraph(node: DOMNode) {
+        // Trim head "br"s
+        while node.children.first?.type == .br {
+            node.children.removeFirst()
+        }
+        // Trim tail "br"s
+        while node.children.last?.type == .br {
+            node.children.removeLast()
+        }
 
-                return text
+        var brCount = 0
+        var last: DOMNode? = nil
+        var nextToLast: DOMNode? = nil
+        var lastIsBlock: Bool = false
+        for n in node.children {
+            if n.type == .br {
+                if lastIsBlock {
+                    n.setTag(tag: tagManager.getInfo(type: .plain)!)
+                    lastIsBlock = false
+                } else {
+                    nextToLast = last
+                    last = n
+                    brCount = brCount + 1
+                }
+            } else {
+                if brCount >= 2 {
+                    //nextToLast!.setTag(tag: tagManager.getInfo(type: .plain)!)
+                    //last!.setTag(tag: tagManager.getInfo(type: .plain)!)
+                }
+                brCount = 0
+                last = nil
+                nextToLast = nil
+
+                handleNewlineAndParagraph(node: n)
             }
+
+            lastIsBlock = n.description?.isBlock ?? false
         }
     }
 
@@ -585,6 +644,28 @@ public class BBCode {
             text = text + nodeContext(node: child)
         }
         return text
+    }
+
+    // Called by unclosedTagDetail
+    func nodeContext(node: DOMNode) -> String {
+        if node.type == .root {
+            // should not be here
+            return ""
+        } else if node.type == .plain {
+            return node.value
+        } else {
+            if let desc = node.description, desc.isSelfClosing {
+                return "[" + node.value + "]"
+            } else {
+                var text: String = "[" + node.value + (node.attr.isEmpty ? "]" : "=" + node.attr + "]")
+                for child in node.children {
+                    text = text + nodeContext(node: child)
+                }
+                text = text + "[/" + node.value + "]"
+
+                return text
+            }
+        }
     }
     
     public func parse(bbcode: String) throws -> String {
@@ -608,6 +689,7 @@ public class BBCode {
         if currentNode.type != .root {
             throw BBCodeError.unclosedTag(unclosedTagDetail(unclosedNode: currentNode))
         } else {
+            handleNewlineAndParagraph(node: currentNode)
             return (currentNode.description!.render!(currentNode))
         }
     }
@@ -622,20 +704,20 @@ extension String {
         var g = self.unicodeScalars.makeIterator()
         var lastWasCR = false
         while let c = g.next() {
-            if c == UnicodeScalar(10) { // \n
-                if lastWasCR {
-                    lastWasCR = false
-                    ret.append("\n")
-                } else {
-                    ret.append("<br>\n")
-                }
-                continue
-            } else if c == UnicodeScalar(13) { // \r
-                lastWasCR = true
-                ret.append("<br>\r")
-                continue
-            }
-            lastWasCR = false
+//            if c == UnicodeScalar(10) { // \n
+//                if lastWasCR {
+//                    lastWasCR = false
+//                    ret.append("\n")
+//                } else {
+//                    ret.append("<br>\n")
+//                }
+//                continue
+//            } else if c == UnicodeScalar(13) { // \r
+//                lastWasCR = true
+//                ret.append("<br>\r")
+//                continue
+//            }
+//            lastWasCR = false
             if c < UnicodeScalar(0x0009) {
                 if let scale = UnicodeScalar(0x0030 + UInt32(c)) {
                     ret.append("&#x")

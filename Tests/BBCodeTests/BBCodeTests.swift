@@ -52,4 +52,12 @@ class BBCodeTests: XCTestCase {
         XCTAssertEqual(try BBCode().parse(bbcode: "Test [code] coded text [//[[[[[[[[ [/code]"), "Test <div class=\"codebox\"><pre><code> coded text [//[[[[[[[[ </code></pre></div>")
         XCTAssertEqual(try BBCode().parse(bbcode: "[b=abc]xyz[/b]"), "[b=abc]xyz[/b]")
     }
+
+    func testNewline() {
+        XCTAssertEqual(try BBCode().parse(bbcode: "text\nnextline\r\n3rd line\r4th line"), "text<br>nextline<br>3rd line<br>4th line")
+    }
+
+    func testNewlineAfterBlock() {
+        XCTAssertEqual(try BBCode().parse(bbcode: "[quote]text[/quote]\nnextline\r\n3rd line\r4th line"), "<div class=\"quotebox\"><blockquote><div><p>text</p></div></blockquote></div>nextline<br>3rd line<br>4th line")
+    }
 }

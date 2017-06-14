@@ -105,7 +105,8 @@ public class BBCode {
 
     enum BBType: Int {
         case unknow = 0, root
-        case plain, br
+        case plain
+        case br
         case quote, code, hide, url, image, flash, user
         case bold, italic, underline, delete, color, header
         case smilies // one to many
@@ -194,18 +195,18 @@ public class BBCode {
             ),
             ("quote", .quote,
              TagDescription(tagNeeded: true, isSelfClosing: false,
-                            allowedChildren: [.bold, .italic, .underline, .delete, .header, .color, .quote, .code, .hide, .url, .image, .flash, .user, .smilies],
+                            allowedChildren: [.br, .bold, .italic, .underline, .delete, .header, .color, .quote, .code, .hide, .url, .image, .flash, .user, .smilies],
                             allowAttr: true,
                             isBlock: true,
                             render: { n in
                                 var html: String
                                 if n.attr.isEmpty {
-                                    html = "<div class=\"quotebox\"><blockquote><div><p>"
+                                    html = "<div class=\"quotebox\"><blockquote><div>"
                                 } else {
-                                    html = "<div class=\"quotebox\"><cite>\(n.escapedAttr)</cite><blockquote><div><p>"
+                                    html = "<div class=\"quotebox\"><cite>\(n.escapedAttr)</cite><blockquote><div>"
                                 }
                                 html.append(n.renderChildren())
-                                html.append("</p></div></blockquote></div>")
+                                html.append("</div></blockquote></div>")
                                 return html })
             ),
             ("code", .code,
@@ -217,7 +218,7 @@ public class BBCode {
                                 return html })
             ),
             ("hide", .hide,
-             TagDescription(tagNeeded: true, isSelfClosing: false, allowedChildren: nil, allowAttr: true, isBlock: true,
+             TagDescription(tagNeeded: true, isSelfClosing: false, allowedChildren: [.br], allowAttr: true, isBlock: true,
                             render: nil /*TODO*/)
             ),
             ("url", .url,
@@ -283,7 +284,7 @@ public class BBCode {
              })
             ),
             ("b", .bold,
-             TagDescription(tagNeeded: true, isSelfClosing: false, allowedChildren: [.italic, .delete, .underline, .url], allowAttr: false, isBlock: false,
+             TagDescription(tagNeeded: true, isSelfClosing: false, allowedChildren: [.br, .italic, .delete, .underline, .url], allowAttr: false, isBlock: false,
                             render: { n in
                                 var html: String = "<b>"
                                 html.append(n.renderChildren())
@@ -291,7 +292,7 @@ public class BBCode {
                                 return html })
             ),
             ("i", .italic,
-             TagDescription(tagNeeded: true, isSelfClosing: false, allowedChildren: [.bold, .delete, .underline, .url], allowAttr: false, isBlock: false,
+             TagDescription(tagNeeded: true, isSelfClosing: false, allowedChildren: [.br, .bold, .delete, .underline, .url], allowAttr: false, isBlock: false,
                             render: { n in
                                 var html: String = "<i>"
                                 html.append(n.renderChildren())
@@ -299,7 +300,7 @@ public class BBCode {
                                 return html })
             ),
             ("u", .underline,
-             TagDescription(tagNeeded: true, isSelfClosing: false, allowedChildren: [.bold, .italic, .delete, .url], allowAttr: false, isBlock: false,
+             TagDescription(tagNeeded: true, isSelfClosing: false, allowedChildren: [.br, .bold, .italic, .delete, .url], allowAttr: false, isBlock: false,
                             render: { n in
                                 var html: String = "<u>"
                                 html.append(n.renderChildren())
@@ -307,7 +308,7 @@ public class BBCode {
                                 return html })
             ),
             ("d", .delete,
-             TagDescription(tagNeeded: true, isSelfClosing: false, allowedChildren: [.bold, .italic, .underline, .url], allowAttr: false, isBlock: false,
+             TagDescription(tagNeeded: true, isSelfClosing: false, allowedChildren: [.br, .bold, .italic, .underline, .url], allowAttr: false, isBlock: false,
                             render: { n in
                                 var html: String = "<del>"
                                 html.append(n.renderChildren())
@@ -315,7 +316,7 @@ public class BBCode {
                                 return html })
             ),
             ("color", .color,
-             TagDescription(tagNeeded: true, isSelfClosing: false, allowedChildren: [.bold, .italic, .underline], allowAttr: true, isBlock: false,
+             TagDescription(tagNeeded: true, isSelfClosing: false, allowedChildren: [.br, .bold, .italic, .underline], allowAttr: true, isBlock: false,
                             render: { n in
                                 var html: String
                                 if n.attr.isEmpty {
@@ -327,7 +328,7 @@ public class BBCode {
                                 return html })
             ),
             ("h", .header,
-             TagDescription(tagNeeded: true, isSelfClosing: false, allowedChildren: [.bold, .italic, .underline, .delete, .url], allowAttr: false, isBlock: false,
+             TagDescription(tagNeeded: true, isSelfClosing: false, allowedChildren: [.br, .bold, .italic, .underline, .delete, .url], allowAttr: false, isBlock: false,
                             render: { n in
                                 var html: String = "<h5>"
                                 html.append(n.renderChildren())
@@ -401,27 +402,31 @@ public class BBCode {
         currentNode.children.append(newNode)
         var lastWasCR = false
         while let c = g.next() {
-            if c == UnicodeScalar(10) { // \n
-                if lastWasCR {
-                    lastWasCR = false
-                } else {
-                    if newNode.value.isEmpty {
-                        currentNode.children.removeLast()
+            if c == UnicodeScalar(10) || c == UnicodeScalar(13) {
+                if let allowedChildren = currentNode.description?.allowedChildren, allowedChildren.contains(.br) {
+                    if c == UnicodeScalar(13) || (c == UnicodeScalar(10) && !lastWasCR) {
+                        if newNode.value.isEmpty {
+                            currentNode.children.removeLast()
+                        }
+                        newNode = newDOMNode(type: .br, parent: currentNode)
+                        currentNode.children.append(newNode)
+                        newNode = newDOMNode(type: .plain, parent: currentNode)
+                        currentNode.children.append(newNode)
                     }
-                    newNode = newDOMNode(type: .br, parent: currentNode)
-                    currentNode.children.append(newNode)
-                    newNode = newDOMNode(type: .plain, parent: currentNode)
-                    currentNode.children.append(newNode)
+
+                    if c == UnicodeScalar(13) { // \r
+                        lastWasCR = true
+                    } else { // \n
+                        lastWasCR = false
+                    }
+                } else {
+                    if currentNode.type == .code {
+                        newNode.value.append(Character(c))
+                    } else {
+                        error = BBCodeError.unclosedTag(unclosedTagDetail(unclosedNode: currentNode))
+                        return nil
+                    }
                 }
-            } else if c == UnicodeScalar(13) { // \r
-                lastWasCR = true
-                if newNode.value.isEmpty {
-                    currentNode.children.removeLast()
-                }
-                newNode = newDOMNode(type: .br, parent: currentNode)
-                currentNode.children.append(newNode)
-                newNode = newDOMNode(type: .plain, parent: currentNode)
-                currentNode.children.append(newNode)
             } else {
                 lastWasCR = false
 

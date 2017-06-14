@@ -28,7 +28,8 @@ class BBCodeTests: XCTestCase {
     }
 
     func testQuote() {
-        XCTAssertEqual(try BBCode().parse(bbcode: "[quote]balabala[b]bala[/b][/quote]"), "<div class=\"quotebox\"><blockquote><div><p>balabala<b>bala</b></p></div></blockquote></div>")
+        XCTAssertEqual(try BBCode().parse(bbcode: "[quote]balabala[b]bala[/b][/quote]"), "<div class=\"quotebox\"><blockquote><div>balabala<b>bala</b></div></blockquote></div>")
+        XCTAssertEqual(try BBCode().parse(bbcode: "[quote][quote][quote][/quote][/quote][/quote]"), "<div class=\"quotebox\"><blockquote><div><div class=\"quotebox\"><blockquote><div><div class=\"quotebox\"><blockquote><div></div></blockquote></div></div></blockquote></div></div></blockquote></div>")
     }
 
     func testSmilies() {
@@ -41,7 +42,7 @@ class BBCodeTests: XCTestCase {
     }
 
     func testCode() {
-        XCTAssertEqual(try BBCode().parse(bbcode: "Test [code] coded text [b] Not bold [/b] [/code] [b] bold [/b]"), "Test <div class=\"codebox\"><pre><code> coded text [b] Not bold [/b] </code></pre></div> <b> bold </b>")
+        XCTAssertEqual(try BBCode().parse(bbcode: "Test [code] coded text\n[b] Not bold [/b] [/code] [b] bold [/b]"), "Test <div class=\"codebox\"><pre><code> coded text\n[b] Not bold [/b] </code></pre></div> <b> bold </b>")
     }
 
     func testMix() {
@@ -58,6 +59,6 @@ class BBCodeTests: XCTestCase {
     }
 
     func testNewlineAfterBlock() {
-        XCTAssertEqual(try BBCode().parse(bbcode: "[quote]text[/quote]\nnextline\r\n3rd line\r4th line"), "<div class=\"quotebox\"><blockquote><div><p>text</p></div></blockquote></div>nextline<br>3rd line<br>4th line")
+        XCTAssertEqual(try BBCode().parse(bbcode: "[quote]text\r\n2\r\n[/quote]\nnextline\r\n3rd line\r4th line"), "<div class=\"quotebox\"><blockquote><div>text<br>2</div></blockquote></div>nextline<br>3rd line<br>4th line")
     }
 }

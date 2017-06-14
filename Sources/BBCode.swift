@@ -107,6 +107,7 @@ public class BBCode {
         case unknow = 0, root
         case plain
         case br
+        case paragraphStart, paragraphEnd
         case quote, code, hide, url, image, flash, user
         case bold, italic, underline, delete, color, header
         case smilies // one to many
@@ -192,6 +193,22 @@ public class BBCode {
                             isBlock: false,
                             render: { n in
                                 return "<br>" })
+            ),
+            ("", .paragraphStart,
+             TagDescription(tagNeeded: false, isSelfClosing: true,
+                            allowedChildren: nil,
+                            allowAttr: false,
+                            isBlock: false,
+                            render: { n in
+                                return "<p>" })
+            ),
+            ("", .paragraphEnd,
+             TagDescription(tagNeeded: false, isSelfClosing: true,
+                            allowedChildren: nil,
+                            allowAttr: false,
+                            isBlock: false,
+                            render: { n in
+                                return "</p>" })
             ),
             ("quote", .quote,
              TagDescription(tagNeeded: true, isSelfClosing: false,
@@ -330,9 +347,9 @@ public class BBCode {
             ("h", .header,
              TagDescription(tagNeeded: true, isSelfClosing: false, allowedChildren: [.br, .bold, .italic, .underline, .delete, .url], allowAttr: false, isBlock: false,
                             render: { n in
-                                var html: String = "<h5>"
+                                var html: String = "</p><h5>"
                                 html.append(n.renderChildren())
-                                html.append("</h5>")
+                                html.append("</h5><p>")
                                 return html })
             ),
             ]
@@ -378,7 +395,7 @@ public class BBCode {
         // Create .root description
         let rootDescription = TagDescription(tagNeeded: false, isSelfClosing: false,
                                              allowedChildren: [],
-                                             allowAttr: false, isBlock: false,
+                                             allowAttr: false, isBlock: true,
                                              render: { n in
                                                 return n.renderChildren() })
         for tag in tags {
@@ -599,6 +616,8 @@ public class BBCode {
     }
 
     func handleNewlineAndParagraph(node: DOMNode) {
+        // The end tag may be omitted if the <p> element is immediately followed by an <address>, <article>, <aside>, <blockquote>, <div>, <dl>, <fieldset>, <footer>, <form>, <h1>, <h2>, <h3>, <h4>, <h5>, <h6>, <header>, <hr>, <menu>, <nav>, <ol>, <pre>, <section>, <table>, <ul> or another <p> element, or if there is no more content in the parent element and the parent element is not an <a> element.
+
         // Trim head "br"s
         while node.children.first?.type == .br {
             node.children.removeFirst()
@@ -608,33 +627,38 @@ public class BBCode {
             node.children.removeLast()
         }
 
+        if node.description?.isBlock ?? false && !(node.children.first?.description?.isBlock ?? false) && node.type != .code {
+            node.children.insert(newDOMNode(type: .paragraphStart, parent: node), at: 0)
+        }
+
         var brCount = 0
-        var last: DOMNode? = nil
-        var nextToLast: DOMNode? = nil
-        var lastIsBlock: Bool = false
+        var previous: DOMNode? = nil
+        var previousOfPrevious: DOMNode? = nil
+        var previousIsBlock: Bool = false
         for n in node.children {
+            let isBlock = n.description?.isBlock ?? false
             if n.type == .br {
-                if lastIsBlock {
+                if previousIsBlock {
                     n.setTag(tag: tagManager.getInfo(type: .plain)!)
-                    lastIsBlock = false
+                    previousIsBlock = false
                 } else {
-                    nextToLast = last
-                    last = n
+                    previousOfPrevious = previous
+                    previous = n
                     brCount = brCount + 1
                 }
             } else {
-                if brCount >= 2 {
-                    //nextToLast!.setTag(tag: tagManager.getInfo(type: .plain)!)
-                    //last!.setTag(tag: tagManager.getInfo(type: .plain)!)
+                if brCount >= 2 && isBlock { // only block element can contain paragraphs
+                    previousOfPrevious!.setTag(tag: tagManager.getInfo(type: .paragraphEnd)!)
+                    previous!.setTag(tag: tagManager.getInfo(type: .paragraphStart)!)
                 }
                 brCount = 0
-                last = nil
-                nextToLast = nil
+                previous = nil
+                previousOfPrevious = nil
 
                 handleNewlineAndParagraph(node: n)
             }
 
-            lastIsBlock = n.description?.isBlock ?? false
+            previousIsBlock = isBlock
         }
     }
 
@@ -707,22 +731,7 @@ extension String {
     public var stringByEncodingHTML: String {
         var ret = ""
         var g = self.unicodeScalars.makeIterator()
-        var lastWasCR = false
         while let c = g.next() {
-//            if c == UnicodeScalar(10) { // \n
-//                if lastWasCR {
-//                    lastWasCR = false
-//                    ret.append("\n")
-//                } else {
-//                    ret.append("<br>\n")
-//                }
-//                continue
-//            } else if c == UnicodeScalar(13) { // \r
-//                lastWasCR = true
-//                ret.append("<br>\r")
-//                continue
-//            }
-//            lastWasCR = false
             if c < UnicodeScalar(0x0009) {
                 if let scale = UnicodeScalar(0x0030 + UInt32(c)) {
                     ret.append("&#x")

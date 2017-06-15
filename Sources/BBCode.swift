@@ -339,8 +339,29 @@ public class BBCode {
                                 if n.attr.isEmpty {
                                     html = "<span style=\"color: black\">\(n.renderChildren())</span>"
                                 } else {
-                                    let validatedAttr: String = n.escapedAttr //TODO
-                                    html = "<span style=\"color: \(validatedAttr)\">\(n.renderChildren())</span>"
+                                    var valid = false
+                                    if ["black", "green", "silver", "gray", "olive", "white", "yellow", "maroon", "navy", "red", "blue", "purple", "teal", "fuchsia", "aqua"].contains(n.attr) {
+                                        valid = true
+                                    } else {
+                                        if n.attr.unicodeScalars.count == 4 || n.attr.unicodeScalars.count == 7 {
+                                            var g = n.attr.unicodeScalars.makeIterator()
+                                            if g.next() == "#" {
+                                                while let c = g.next() {
+                                                    if (c >= UnicodeScalar("0") && c <= UnicodeScalar("9")) || (c >= UnicodeScalar("a") && c <= UnicodeScalar("z")) || (c >= UnicodeScalar("A") && c <= UnicodeScalar("Z")) {
+                                                        valid = true
+                                                    } else {
+                                                        valid = false
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    if valid {
+                                        html = "<span style=\"color: \(n.attr)\">\(n.renderChildren())</span>"
+                                    } else {
+                                        html = "[color=\(n.escapedAttr)]\(n.renderChildren())[/color]"
+                                    }
                                 }
                                 return html })
             ),

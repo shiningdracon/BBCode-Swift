@@ -12,7 +12,9 @@ class BBCodeTests: XCTestCase {
 
     func testColor() {
         XCTAssertEqual(try BBCode().parse(bbcode: "[color=#FF0000]Red text[/color]"), "<p><span style=\"color: #FF0000\">Red text</span>")
+        XCTAssertEqual(try BBCode().parse(bbcode: "[color=#0F0]Green text[/color]"), "<p><span style=\"color: #0F0\">Green text</span>")
         XCTAssertEqual(try BBCode().parse(bbcode: "[color=blue]Blue text[/color]"), "<p><span style=\"color: blue\">Blue text</span>")
+        XCTAssertEqual(try BBCode().parse(bbcode: "[color=#ff0000;font-size:100px;]XSS[/color]"), "<p>[color=#ff0000;font-size:100px;]XSS[/color]")
     }
 
     func testUrl() {

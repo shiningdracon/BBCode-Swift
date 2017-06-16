@@ -627,7 +627,8 @@ public class BBCode {
             node.children.removeLast()
         }
 
-        if node.description?.isBlock ?? false && !(node.children.first?.description?.isBlock ?? false) && node.type != .code {
+        let currentIsBlock = node.description?.isBlock ?? false
+        if currentIsBlock && !(node.children.first?.description?.isBlock ?? false) && node.type != .code {
             node.children.insert(newDOMNode(type: .paragraphStart, parent: node), at: 0)
         }
 
@@ -647,7 +648,7 @@ public class BBCode {
                     brCount = brCount + 1
                 }
             } else {
-                if brCount >= 2 && isBlock { // only block element can contain paragraphs
+                if brCount >= 2 && currentIsBlock { // only block element can contain paragraphs
                     previousOfPrevious!.setTag(tag: tagManager.getInfo(type: .paragraphEnd)!)
                     previous!.setTag(tag: tagManager.getInfo(type: .paragraphStart)!)
                 }

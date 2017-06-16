@@ -55,8 +55,8 @@ class BBCodeTests: XCTestCase {
         XCTAssertEqual(try BBCode().parse(bbcode: "[b=abc]xyz[/b]"), "<p>[b=abc]xyz[/b]")
     }
 
-    func testNewline() {
-        XCTAssertEqual(try BBCode().parse(bbcode: "text\nnextline\r\n3rd line\r4th line"), "<p>text<br>nextline<br>3rd line<br>4th line")
+    func testNewlineAndParagraph() {
+        XCTAssertEqual(try BBCode().parse(bbcode: "text\nnextline\r\n3rd line\r4th line\n\nnew paragraph\r\r2nd paragraph\r\n\r\n3rd"), "<p>text<br>nextline<br>3rd line<br>4th line</p><p>new paragraph</p><p>2nd paragraph</p><p>3rd")
     }
 
     func testNewlineAfterBlock() {

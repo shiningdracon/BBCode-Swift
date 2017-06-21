@@ -17,9 +17,12 @@ class BBCodeTests: XCTestCase {
 
     func testUrl() {
         XCTAssertEqual(try BBCode().parse(bbcode: "[url]http://example.com/1.jpg[/url]"), "<p><a href=\"http://example.com/1.jpg\" rel=\"nofollow\">http://example.com/1.jpg</a>")
-        XCTAssertEqual(try BBCode().parse(bbcode: "[url=http://example.com/1.jpg]File 1.jpg[/url]"), "<p><a href=\"http://example.com/1.jpg\" rel=\"nofollow\">File 1.jpg</a>")
+        XCTAssertEqual(try BBCode().parse(bbcode: "[url=http://example.com/1.jpg?a=1&b=2]File 1.jpg[/url]"), "<p><a href=\"http://example.com/1.jpg?a=1&amp;b=2\" rel=\"nofollow\">File 1.jpg</a>")
         XCTAssertEqual(try BBCode().parse(bbcode: "[url=https://'asf'.com]File 1.jpg[/url]"), "<p>File 1.jpg")
         XCTAssertEqual(try BBCode().parse(bbcode: "[url=javascript:alert(String.fromCharCode(88,83,83))]http://google.com[/url]"), "<p>http://google.com")
+        XCTAssertEqual(try BBCode().parse(bbcode: "[url=http://example.com][img]http://example.com/1.jpg[/img][/url]"), "<p><a href=\"http://example.com\" rel=\"nofollow\"><span class=\"postimg\"><img src=\"http://example.com/1.jpg\" alt=\"\" /></span></a>")
+        XCTAssertEqual(try BBCode().parse(bbcode: "[url][img]http://example.com/1.jpg[/img][/url]"), "<p><span class=\"postimg\"><img src=\"http://example.com/1.jpg\" alt=\"\" /></span>")
+        
     }
 
     func testImg() {

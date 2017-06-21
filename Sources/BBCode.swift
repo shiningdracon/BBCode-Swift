@@ -239,22 +239,38 @@ public class BBCode {
                             render: nil /*TODO*/)
             ),
             ("url", .url,
-             TagDescription(tagNeeded: true, isSelfClosing: false, allowedChildren: nil, allowAttr: true, isBlock: false,
+             TagDescription(tagNeeded: true, isSelfClosing: false,
+                            allowedChildren: [.image],
+                            allowAttr: true, isBlock: false,
                             render: { n in
                                 var html: String
                                 var link: String
                                 if n.attr.isEmpty {
-                                    link = n.renderChildren()
-                                    html = "<a href=\"\(link)\" rel=\"nofollow\">\(n.renderChildren())</a>"
+                                    var isPlain = true
+                                    for child in n.children {
+                                        if child.type != BBType.plain {
+                                            isPlain = false
+                                        }
+                                    }
+                                    if isPlain {
+                                        link = n.renderChildren()
+                                        if link.isLink {
+                                            html = "<a href=\"\(link)\" rel=\"nofollow\">\(link)</a>"
+                                        } else {
+                                            html = link
+                                        }
+                                    } else {
+                                        html = n.renderChildren()
+                                    }
                                 } else {
                                     link = n.escapedAttr
-                                    html = "<a href=\"\(link)\" rel=\"nofollow\">\(n.renderChildren())</a>"
+                                    if link.isLink {
+                                        html = "<a href=\"\(link)\" rel=\"nofollow\">\(n.renderChildren())</a>"
+                                    } else {
+                                        html = n.renderChildren()
+                                    }
                                 }
-                                if link.isLink {
-                                    return html
-                                } else {
-                                    return n.renderChildren()
-                                }
+                                return html
              })
             ),
             ("img", .image,
@@ -648,7 +664,8 @@ public class BBCode {
             node.children.removeLast()
         }
 
-        if node.description?.isBlock ?? false && !(node.children.first?.description?.isBlock ?? false) && node.type != .code {
+        let currentIsBlock = node.description?.isBlock ?? false
+        if currentIsBlock && !(node.children.first?.description?.isBlock ?? false) && node.type != .code {
             node.children.insert(newDOMNode(type: .paragraphStart, parent: node), at: 0)
         }
 
@@ -668,7 +685,7 @@ public class BBCode {
                     brCount = brCount + 1
                 }
             } else {
-                if brCount >= 2 && isBlock { // only block element can contain paragraphs
+                if brCount >= 2 && currentIsBlock { // only block element can contain paragraphs
                     previousOfPrevious!.setTag(tag: tagManager.getInfo(type: .paragraphEnd)!)
                     previous!.setTag(tag: tagManager.getInfo(type: .paragraphStart)!)
                 }
@@ -749,7 +766,7 @@ public class BBCode {
 
 extension String {
     /// Returns the String with all special HTML characters encoded.
-    public var stringByEncodingHTML: String {
+    var stringByEncodingHTML: String {
         var ret = ""
         var g = self.unicodeScalars.makeIterator()
         while let c = g.next() {
@@ -778,7 +795,7 @@ extension String {
         return ret
     }
 
-    public var isLink: Bool {
+    var isLink: Bool {
     #if os(Linux)
         return true //TODO
     #else

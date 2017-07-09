@@ -108,7 +108,7 @@ public class BBCode {
         case plain
         case br
         case paragraphStart, paragraphEnd
-        case quote, code, hide, url, image, flash, user
+        case quote, code, hide, url, image, flash, user, post, topic
         case bold, italic, underline, delete, color, header
         case smilies // one to many
     }
@@ -212,7 +212,7 @@ public class BBCode {
             ),
             ("quote", .quote,
              TagDescription(tagNeeded: true, isSelfClosing: false,
-                            allowedChildren: [.br, .bold, .italic, .underline, .delete, .header, .color, .quote, .code, .hide, .url, .image, .flash, .user, .smilies],
+                            allowedChildren: [.br, .bold, .italic, .underline, .delete, .header, .color, .quote, .code, .hide, .url, .image, .flash, .user, .post, .topic, .smilies],
                             allowAttr: true,
                             isBlock: true,
                             render: { n in
@@ -312,6 +312,48 @@ public class BBCode {
                                         return "<a href=\"/forum/user/\(userId)\">\(text)</a>"
                                     } else {
                                         return "[user=\(n.escapedAttr)]\(text)[/user]"
+                                    }
+                                }
+             })
+            ),
+            ("post", .post,
+             TagDescription(tagNeeded: true, isSelfClosing: false, allowedChildren: nil, allowAttr: true, isBlock: false,
+                            render: { (n: DOMNode) in
+                                var postIdStr: String
+                                if n.attr.isEmpty {
+                                    postIdStr = n.renderChildren()
+                                    if let postId = UInt32(postIdStr) {
+                                        return "<a href=\"/forum/post/\(postId)\">/forum/post/\(postId)</a>"
+                                    } else {
+                                        return "[post]" + postIdStr + "[/post]"
+                                    }
+                                } else {
+                                    let text = n.renderChildren()
+                                    if let postId = UInt32(n.attr) {
+                                        return "<a href=\"/forum/post/\(postId)\">\(text)</a>"
+                                    } else {
+                                        return "[post=\(n.escapedAttr)]\(text)[/post]"
+                                    }
+                                }
+             })
+            ),
+            ("topic", .topic,
+             TagDescription(tagNeeded: true, isSelfClosing: false, allowedChildren: nil, allowAttr: true, isBlock: false,
+                            render: { (n: DOMNode) in
+                                var idStr: String
+                                if n.attr.isEmpty {
+                                    idStr = n.renderChildren()
+                                    if let id = UInt32(idStr) {
+                                        return "<a href=\"/forum/topic/\(id)\">/forum/topic/\(id)</a>"
+                                    } else {
+                                        return "[topic]" + idStr + "[/topic]"
+                                    }
+                                } else {
+                                    let text = n.renderChildren()
+                                    if let id = UInt32(n.attr) {
+                                        return "<a href=\"/forum/topic/\(id)\">\(text)</a>"
+                                    } else {
+                                        return "[topic=\(n.escapedAttr)]\(text)[/topic]"
                                     }
                                 }
              })

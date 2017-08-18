@@ -382,7 +382,7 @@ public class BBCode {
                                 html.append("</u>")
                                 return html })
             ),
-            ("d", .delete,
+            ("del", .delete,
              TagDescription(tagNeeded: true, isSelfClosing: false, allowedChildren: [.br, .bold, .italic, .underline, .url], allowAttr: false, isBlock: false,
                             render: { n in
                                 var html: String = "<del>"

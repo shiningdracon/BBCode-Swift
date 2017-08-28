@@ -28,7 +28,7 @@ public enum BBCodeError : Error {
 
 public class BBCode {
     typealias USIterator = String.UnicodeScalarView.Iterator
-    typealias Render = (DOMNode) -> String
+    typealias Render = (DOMNode, [String: Any]?) -> String
     typealias TagInfo = (String, BBType, TagDescription)
     
     struct Parser {
@@ -74,11 +74,11 @@ public class BBCode {
             self.tagDescription = tag.2
         }
 
-        func renderChildren() -> String {
+        func renderChildren(_ args: [String: Any]?) -> String {
             var html = ""
             for n in children {
                 if let render = n.description?.render {
-                    html.append(render(n))
+                    html.append(render(n, args))
                 }
             }
             return html
@@ -183,7 +183,7 @@ public class BBCode {
                             allowedChildren: nil,
                             allowAttr: false,
                             isBlock: false,
-                            render: { n in
+                            render: { (n: DOMNode, args: [String: Any]?) in
                                 return n.escapedValue })
             ),
             ("", .br,
@@ -191,7 +191,7 @@ public class BBCode {
                             allowedChildren: nil,
                             allowAttr: false,
                             isBlock: false,
-                            render: { n in
+                            render: { (n: DOMNode, args: [String: Any]?) in
                                 return "<br>" })
             ),
             ("", .paragraphStart,
@@ -199,7 +199,7 @@ public class BBCode {
                             allowedChildren: nil,
                             allowAttr: false,
                             isBlock: false,
-                            render: { n in
+                            render: { (n: DOMNode, args: [String: Any]?) in
                                 return "<p>" })
             ),
             ("", .paragraphEnd,
@@ -207,7 +207,7 @@ public class BBCode {
                             allowedChildren: nil,
                             allowAttr: false,
                             isBlock: false,
-                            render: { n in
+                            render: { (n: DOMNode, args: [String: Any]?) in
                                 return "</p>" })
             ),
             ("quote", .quote,
@@ -215,34 +215,52 @@ public class BBCode {
                             allowedChildren: [.br, .bold, .italic, .underline, .delete, .header, .color, .quote, .code, .hide, .url, .image, .flash, .user, .post, .topic, .smilies],
                             allowAttr: true,
                             isBlock: true,
-                            render: { n in
+                            render: { (n: DOMNode, args: [String: Any]?) in
                                 var html: String
                                 if n.attr.isEmpty {
                                     html = "<div class=\"quotebox\"><blockquote><div>"
                                 } else {
                                     html = "<div class=\"quotebox\"><cite>\(n.escapedAttr)</cite><blockquote><div>"
                                 }
-                                html.append(n.renderChildren())
+                                html.append(n.renderChildren(args))
                                 html.append("</div></blockquote></div>")
                                 return html })
             ),
             ("code", .code,
              TagDescription(tagNeeded: true, isSelfClosing: false, allowedChildren: nil, allowAttr: false, isBlock: true,
-                            render: { n in
+                            render: { (n: DOMNode, args: [String: Any]?) in
                                 var html = "<div class=\"codebox\"><pre><code>"
-                                html.append(n.renderChildren())
+                                html.append(n.renderChildren(args))
                                 html.append("</code></pre></div>")
                                 return html })
             ),
             ("hide", .hide,
-             TagDescription(tagNeeded: true, isSelfClosing: false, allowedChildren: [.br], allowAttr: true, isBlock: true,
-                            render: nil /*TODO*/)
+             TagDescription(tagNeeded: true, isSelfClosing: false, allowedChildren: [.br, .bold, .italic, .underline, .delete, .header, .color, .quote, .code, .hide, .url, .image, .flash, .user, .post, .topic, .smilies], allowAttr: true, isBlock: true,
+                            render: { (n: DOMNode, args: [String: Any]?) in
+                                let numberPosts = args?["post number"] as? Int ?? Int(0)
+                                var threshold: Int
+                                if n.attr.isEmpty {
+                                    threshold = 1
+                                } else {
+                                    threshold = Int(n.attr) ?? 1
+                                    if threshold < 1 {
+                                        threshold = 1
+                                    }
+                                }
+                                var html = "<div class=\"quotebox\"><cite>Hidden text</cite><blockquote><div>"
+                                if numberPosts >= threshold {
+                                    html.append(n.renderChildren(args))
+                                } else {
+                                    html.append("<p>Post number >= \(threshold) can see")
+                                }
+                                html.append("</div></blockquote></div>")
+                                return html })
             ),
             ("url", .url,
              TagDescription(tagNeeded: true, isSelfClosing: false,
                             allowedChildren: [.image],
                             allowAttr: true, isBlock: false,
-                            render: { n in
+                            render: { (n: DOMNode, args: [String: Any]?) in
                                 var html: String
                                 var link: String
                                 if n.attr.isEmpty {
@@ -253,21 +271,21 @@ public class BBCode {
                                         }
                                     }
                                     if isPlain {
-                                        link = n.renderChildren()
+                                        link = n.renderChildren(args)
                                         if link.isLink {
                                             html = "<a href=\"\(link)\" rel=\"nofollow\">\(link)</a>"
                                         } else {
                                             html = link
                                         }
                                     } else {
-                                        html = n.renderChildren()
+                                        html = n.renderChildren(args)
                                     }
                                 } else {
                                     link = n.escapedAttr
                                     if link.isLink {
-                                        html = "<a href=\"\(link)\" rel=\"nofollow\">\(n.renderChildren())</a>"
+                                        html = "<a href=\"\(link)\" rel=\"nofollow\">\(n.renderChildren(args))</a>"
                                     } else {
-                                        html = n.renderChildren()
+                                        html = n.renderChildren(args)
                                     }
                                 }
                                 return html
@@ -275,9 +293,9 @@ public class BBCode {
             ),
             ("img", .image,
              TagDescription(tagNeeded: true, isSelfClosing: false, allowedChildren: nil, allowAttr: true, isBlock: false,
-                            render: { n in
+                            render: { (n: DOMNode, args: [String: Any]?) in
                                 var html: String
-                                let link: String = n.renderChildren()
+                                let link: String = n.renderChildren(args)
                                 if n.attr.isEmpty {
                                     html = "<span class=\"postimg\"><img src=\"\(link)\" alt=\"\" /></span>"
                                 } else {
@@ -297,17 +315,17 @@ public class BBCode {
             ),
             ("user", .user,
              TagDescription(tagNeeded: true, isSelfClosing: false, allowedChildren: nil, allowAttr: true, isBlock: false,
-                            render: { (n: DOMNode) in
+                            render: { (n: DOMNode, args: [String: Any]?) in
                                 var userIdStr: String
                                 if n.attr.isEmpty {
-                                    userIdStr = n.renderChildren()
+                                    userIdStr = n.renderChildren(args)
                                     if let userId = UInt32(userIdStr) {
                                         return "<a href=\"/forum/user/\(userId)\">/forum/user/\(userId)</a>"
                                     } else {
                                         return "[user]" + userIdStr + "[/user]"
                                     }
                                 } else {
-                                    let text = n.renderChildren()
+                                    let text = n.renderChildren(args)
                                     if let userId = UInt32(n.attr) {
                                         return "<a href=\"/forum/user/\(userId)\">\(text)</a>"
                                     } else {
@@ -318,17 +336,17 @@ public class BBCode {
             ),
             ("post", .post,
              TagDescription(tagNeeded: true, isSelfClosing: false, allowedChildren: nil, allowAttr: true, isBlock: false,
-                            render: { (n: DOMNode) in
+                            render: { (n: DOMNode, args: [String: Any]?) in
                                 var postIdStr: String
                                 if n.attr.isEmpty {
-                                    postIdStr = n.renderChildren()
+                                    postIdStr = n.renderChildren(args)
                                     if let postId = UInt32(postIdStr) {
                                         return "<a href=\"/forum/post/\(postId)\">/forum/post/\(postId)</a>"
                                     } else {
                                         return "[post]" + postIdStr + "[/post]"
                                     }
                                 } else {
-                                    let text = n.renderChildren()
+                                    let text = n.renderChildren(args)
                                     if let postId = UInt32(n.attr) {
                                         return "<a href=\"/forum/post/\(postId)\">\(text)</a>"
                                     } else {
@@ -339,17 +357,17 @@ public class BBCode {
             ),
             ("topic", .topic,
              TagDescription(tagNeeded: true, isSelfClosing: false, allowedChildren: nil, allowAttr: true, isBlock: false,
-                            render: { (n: DOMNode) in
+                            render: { (n: DOMNode, args: [String: Any]?) in
                                 var idStr: String
                                 if n.attr.isEmpty {
-                                    idStr = n.renderChildren()
+                                    idStr = n.renderChildren(args)
                                     if let id = UInt32(idStr) {
                                         return "<a href=\"/forum/topic/\(id)\">/forum/topic/\(id)</a>"
                                     } else {
                                         return "[topic]" + idStr + "[/topic]"
                                     }
                                 } else {
-                                    let text = n.renderChildren()
+                                    let text = n.renderChildren(args)
                                     if let id = UInt32(n.attr) {
                                         return "<a href=\"/forum/topic/\(id)\">\(text)</a>"
                                     } else {
@@ -360,42 +378,42 @@ public class BBCode {
             ),
             ("b", .bold,
              TagDescription(tagNeeded: true, isSelfClosing: false, allowedChildren: [.br, .italic, .delete, .underline, .url], allowAttr: false, isBlock: false,
-                            render: { n in
+                            render: { (n: DOMNode, args: [String: Any]?) in
                                 var html: String = "<b>"
-                                html.append(n.renderChildren())
+                                html.append(n.renderChildren(args))
                                 html.append("</b>")
                                 return html })
             ),
             ("i", .italic,
              TagDescription(tagNeeded: true, isSelfClosing: false, allowedChildren: [.br, .bold, .delete, .underline, .url], allowAttr: false, isBlock: false,
-                            render: { n in
+                            render: { (n: DOMNode, args: [String: Any]?) in
                                 var html: String = "<i>"
-                                html.append(n.renderChildren())
+                                html.append(n.renderChildren(args))
                                 html.append("</i>")
                                 return html })
             ),
             ("u", .underline,
              TagDescription(tagNeeded: true, isSelfClosing: false, allowedChildren: [.br, .bold, .italic, .delete, .url], allowAttr: false, isBlock: false,
-                            render: { n in
+                            render: { (n: DOMNode, args: [String: Any]?) in
                                 var html: String = "<u>"
-                                html.append(n.renderChildren())
+                                html.append(n.renderChildren(args))
                                 html.append("</u>")
                                 return html })
             ),
             ("del", .delete,
              TagDescription(tagNeeded: true, isSelfClosing: false, allowedChildren: [.br, .bold, .italic, .underline, .url], allowAttr: false, isBlock: false,
-                            render: { n in
+                            render: { (n: DOMNode, args: [String: Any]?) in
                                 var html: String = "<del>"
-                                html.append(n.renderChildren())
+                                html.append(n.renderChildren(args))
                                 html.append("</del>")
                                 return html })
             ),
             ("color", .color,
              TagDescription(tagNeeded: true, isSelfClosing: false, allowedChildren: [.br, .bold, .italic, .underline], allowAttr: true, isBlock: false,
-                            render: { n in
+                            render: { (n: DOMNode, args: [String: Any]?) in
                                 var html: String
                                 if n.attr.isEmpty {
-                                    html = "<span style=\"color: black\">\(n.renderChildren())</span>"
+                                    html = "<span style=\"color: black\">\(n.renderChildren(args))</span>"
                                 } else {
                                     var valid = false
                                     if ["black", "green", "silver", "gray", "olive", "white", "yellow", "maroon", "navy", "red", "blue", "purple", "teal", "fuchsia", "aqua"].contains(n.attr) {
@@ -416,18 +434,18 @@ public class BBCode {
                                     }
 
                                     if valid {
-                                        html = "<span style=\"color: \(n.attr)\">\(n.renderChildren())</span>"
+                                        html = "<span style=\"color: \(n.attr)\">\(n.renderChildren(args))</span>"
                                     } else {
-                                        html = "[color=\(n.escapedAttr)]\(n.renderChildren())[/color]"
+                                        html = "[color=\(n.escapedAttr)]\(n.renderChildren(args))[/color]"
                                     }
                                 }
                                 return html })
             ),
             ("h", .header,
              TagDescription(tagNeeded: true, isSelfClosing: false, allowedChildren: [.br, .bold, .italic, .underline, .delete, .url], allowAttr: false, isBlock: false,
-                            render: { n in
+                            render: { (n: DOMNode, args: [String: Any]?) in
                                 var html: String = "</p><h5>"
-                                html.append(n.renderChildren())
+                                html.append(n.renderChildren(args))
                                 html.append("</h5><p>")
                                 return html })
             ),
@@ -467,7 +485,7 @@ public class BBCode {
             ]
         for emote in smilies {
             tags.append((emote.0, .smilies, TagDescription(tagNeeded: true, isSelfClosing: true, allowedChildren: nil, allowAttr: false, isBlock: false,
-                                                        render: { (n: DOMNode) in
+                                                        render: { (n: DOMNode, args: [String: Any]?) in
                                                             return "<img src=\"/smilies/\(emote.1)\" alt=\"\" />" })))
         }
 
@@ -475,8 +493,8 @@ public class BBCode {
         let rootDescription = TagDescription(tagNeeded: false, isSelfClosing: false,
                                              allowedChildren: [],
                                              allowAttr: false, isBlock: true,
-                                             render: { n in
-                                                return n.renderChildren() })
+                                             render: { (n: DOMNode, args: [String: Any]?) in
+                                                return n.renderChildren(args) })
         for tag in tags {
             rootDescription.allowedChildren?.append(tag.1)
         }
@@ -776,8 +794,12 @@ public class BBCode {
             }
         }
     }
-    
+
     public func parse(bbcode: String) throws -> String {
+        return try parse(bbcode: bbcode, args: nil)
+    }
+    
+    public func parse(bbcode: String, args: [String: Any]?) throws -> String {
         var g: USIterator = bbcode.unicodeScalars.makeIterator()
         self.content_parser = Parser(parse: contentParser)
         self.tag_parser = Parser(parse: tagParser)
@@ -799,7 +821,7 @@ public class BBCode {
             throw BBCodeError.unclosedTag(unclosedTagDetail(unclosedNode: currentNode))
         } else {
             handleNewlineAndParagraph(node: currentNode)
-            return (currentNode.description!.render!(currentNode))
+            return (currentNode.description!.render!(currentNode, args))
         }
     }
 

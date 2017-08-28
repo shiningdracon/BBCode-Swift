@@ -71,4 +71,9 @@ class BBCodeTests: XCTestCase {
     func testNewlineAfterBlock() {
         XCTAssertEqual(try BBCode().parse(bbcode: "[quote]text\r\n2\r\n[/quote]\nnextline\r\n3rd line\r4th line"), "<div class=\"quotebox\"><blockquote><div><p>text<br>2</div></blockquote></div>nextline<br>3rd line<br>4th line")
     }
+
+    func testHide() {
+        XCTAssertEqual(try BBCode().parse(bbcode: "[hide]text content[/hide]"), "<div class=\"quotebox\"><cite>Hidden text</cite><blockquote><div><p>Post number >= 1 can see</div></blockquote></div>")
+        XCTAssertEqual(try BBCode().parse(bbcode: "[hide]text content[/hide]", args: ["post number": 2]), "<div class=\"quotebox\"><cite>Hidden text</cite><blockquote><div><p>text content</div></blockquote></div>")
+    }
 }

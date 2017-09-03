@@ -39,7 +39,7 @@ class BBCodeTests: XCTestCase {
     }
 
     func testSmilies() {
-        XCTAssertEqual(try BBCode().parse(bbcode: "[大笑]"), "<p><img src=\"/smilies/haku-laugh.png\" alt=\"\" />")
+        XCTAssertEqual(try BBCode().parse(bbcode: "[大笑]"), "<p><img src=\"/smilies/haku-laugh.png\" alt=\"[大笑]\" />")
     }
 
     func testUser() {
@@ -56,7 +56,7 @@ class BBCodeTests: XCTestCase {
     }
 
     func testMix() {
-        XCTAssertEqual(try BBCode().parse(bbcode: "[[大笑]"), "<p>[<img src=\"/smilies/haku-laugh.png\" alt=\"\" />")
+        XCTAssertEqual(try BBCode().parse(bbcode: "[[大笑]"), "<p>[<img src=\"/smilies/haku-laugh.png\" alt=\"[大笑]\" />")
         XCTAssertEqual(try BBCode().parse(bbcode: "Test [code] coded text [/b] [/code]"), "<p>Test <div class=\"codebox\"><pre><code> coded text [/b] </code></pre></div>")
         XCTAssertEqual(try BBCode().parse(bbcode: "Test [code] coded text [/b] [/code][/code]"), "<p>Test <div class=\"codebox\"><pre><code> coded text [/b] </code></pre></div>[/code]")
         XCTAssertEqual(try BBCode().parse(bbcode: "Test [code] coded text [/b [/code]"), "<p>Test <div class=\"codebox\"><pre><code> coded text [/b </code></pre></div>")

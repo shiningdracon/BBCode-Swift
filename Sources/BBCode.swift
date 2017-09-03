@@ -486,7 +486,7 @@ public class BBCode {
         for emote in smilies {
             tags.append((emote.0, .smilies, TagDescription(tagNeeded: true, isSelfClosing: true, allowedChildren: nil, allowAttr: false, isBlock: false,
                                                         render: { (n: DOMNode, args: [String: Any]?) in
-                                                            return "<img src=\"/smilies/\(emote.1)\" alt=\"\" />" })))
+                                                            return "<img src=\"/smilies/\(emote.1)\" alt=\"[\(emote.0)]\" />" })))
         }
 
         // Create .root description

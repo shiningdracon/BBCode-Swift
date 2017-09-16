@@ -1,6 +1,6 @@
 import Foundation
 
-public enum BBCodeError : Error {
+public enum BBCodeError: Error {
     case internalError(String)
     case unfinishedOpeningTag(String)
     case unfinishedClosingTag(String)
@@ -48,7 +48,7 @@ class Worker {
         self.error = nil
     }
 
-    func parse(_ bbcode: String) throws {
+    func parse(_ bbcode: String) -> DOMNode? {
         var g: USIterator = bbcode.unicodeScalars.makeIterator()
         var currentParser: Parser? = content_parser
 
@@ -56,9 +56,13 @@ class Worker {
             currentParser = currentParser?.parse(&g, self)
         } while currentParser != nil
 
-        if error != nil {
-            throw error!
+        if error == nil {
+            if currentNode.type == .root {
+                return currentNode
+            }
         }
+
+        return nil
     }
 }
 
@@ -817,22 +821,22 @@ public class BBCode {
         self.tagManager = TagManager(tags: tags);
     }
 
-
-
-    public func parse(bbcode: String) throws -> String {
-        return try parse(bbcode: bbcode, args: nil)
-    }
-    
-    public func parse(bbcode: String, args: [String: Any]?) throws -> String {
+    public func parse(bbcode: String, args: [String: Any]? = nil) throws -> String {
         let worker: Worker = Worker(tagManager: tagManager)
 
-        try worker.parse(bbcode)
-
-        if worker.currentNode.type != .root {
-            throw BBCodeError.unclosedTag(unclosedTagDetail(unclosedNode: worker.currentNode))
+        if let domTree = worker.parse(bbcode) {
+            handleNewlineAndParagraph(node: domTree, tagManager: tagManager)
+            return (domTree.description!.render!(domTree, args))
         } else {
-            handleNewlineAndParagraph(node: worker.currentNode, tagManager: tagManager)
-            return (worker.currentNode.description!.render!(worker.currentNode, args))
+            throw worker.error!
+        }
+    }
+
+    public func validate(bbcode: String) throws{
+        let worker = Worker(tagManager: tagManager)
+
+        guard let _ = worker.parse(bbcode) else {
+            throw worker.error!
         }
     }
 }

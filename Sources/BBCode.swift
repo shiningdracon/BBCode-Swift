@@ -26,157 +26,471 @@ public enum BBCodeError : Error {
     }
 }
 
-public class BBCode {
-    typealias USIterator = String.UnicodeScalarView.Iterator
-    typealias Render = (DOMNode, [String: Any]?) -> String
-    typealias TagInfo = (String, BBType, TagDescription)
-    
-    struct Parser {
-        let parse: (inout USIterator) -> (Parser)?
+typealias USIterator = String.UnicodeScalarView.Iterator
+typealias Render = (DOMNode, [String: Any]?) -> String
+typealias TagInfo = (String, BBType, TagDescription)
+
+struct Parser {
+    let parse: (inout USIterator, Worker) -> (Parser)?
+}
+
+class Worker {
+    let tagManager: TagManager
+    var currentNode: DOMNode
+    var error: BBCodeError?
+    private let rootNode: DOMNode
+
+    init(tagManager: TagManager) {
+        self.tagManager = tagManager
+        self.rootNode = newDOMNode(type: .root, parent: nil, tagManager: tagManager)
+
+        self.currentNode = self.rootNode
+        self.error = nil
     }
 
-    class DOMNode {
-        var children: [DOMNode] = []
-        var parent: DOMNode? = nil
-        private var tagType: BBType
-        private var tagDescription: TagDescription? = nil
-        var type: BBType {
-            get {
-                return tagType
+    func parse(_ bbcode: String) throws {
+        var g: USIterator = bbcode.unicodeScalars.makeIterator()
+        var currentParser: Parser? = content_parser
+
+        repeat {
+            currentParser = currentParser?.parse(&g, self)
+        } while currentParser != nil
+
+        if error != nil {
+            throw error!
+        }
+    }
+}
+
+class DOMNode {
+    var children: [DOMNode] = []
+    weak var parent: DOMNode? = nil
+    private var tagType: BBType
+    private var tagDescription: TagDescription? = nil
+    var type: BBType {
+        get {
+            return tagType
+        }
+    }
+    var description: TagDescription? {
+        get {
+            return tagDescription
+        }
+    }
+    var value: String = ""
+    var attr: String = ""
+    var paired: Bool = true
+
+    var escapedValue: String {
+        // Only plain node value is directly usable in render, other tags needs to render subnode.
+        return value.stringByEncodingHTML
+    }
+
+    var escapedAttr: String {
+        return attr.stringByEncodingHTML
+    }
+
+    init(tag: TagInfo, parent: DOMNode?) {
+        self.tagType = tag.1
+        self.tagDescription = tag.2
+        self.parent = parent
+    }
+
+    func setTag(tag: TagInfo) {
+        self.tagType = tag.1
+        self.tagDescription = tag.2
+    }
+
+    func renderChildren(_ args: [String: Any]?) -> String {
+        var html = ""
+        for n in children {
+            if let render = n.description?.render {
+                html.append(render(n, args))
             }
         }
-        var description: TagDescription? {
-            get {
-                return tagDescription
+        return html
+    }
+}
+
+class TagDescription {
+    var tagNeeded: Bool
+    var isSelfClosing: Bool
+    var allowedChildren: [BBType]? // Allowed sub-elements of this element
+    var allowAttr: Bool
+    var isBlock: Bool
+    var render: Render?
+
+    init(tagNeeded: Bool, isSelfClosing: Bool, allowedChildren: [BBType]?, allowAttr: Bool, isBlock: Bool, render: Render?) {
+        self.tagNeeded = tagNeeded
+        self.isSelfClosing = isSelfClosing
+        self.allowedChildren = allowedChildren
+        self.allowAttr = allowAttr
+        self.isBlock = isBlock
+        self.render = render
+    }
+}
+
+enum BBType: Int {
+    case unknow = 0, root
+    case plain
+    case br
+    case paragraphStart, paragraphEnd
+    case quote, code, hide, url, image, flash, user, post, topic
+    case bold, italic, underline, delete, color, header
+    case smilies // one to many
+}
+
+class TagManager {
+    let tags: [TagInfo]
+
+    init(tags: [TagInfo]) {
+        var tmptags = tags
+
+
+
+        tmptags.sort(by: {a, b in
+            if a.0.characters.count > b.0.characters.count {
+                return true
+            } else {
+                return false
+            }
+        })
+        self.tags = tmptags
+    }
+
+    func getType(str: String) -> BBType? {
+        for tag in tags {
+            if tag.0 == str {
+                return tag.1
             }
         }
-        var value: String = ""
-        var attr: String = ""
-        var paired: Bool = true
+        return nil
+    }
 
-        var escapedValue: String {
-            // Only plain node value is directly usable in render, other tags needs to render subnode.
-            return value.stringByEncodingHTML
+    func getInfo(str: String) -> TagInfo? {
+        for tag in tags {
+            if tag.0 == str {
+                return tag
+            }
         }
+        return nil
+    }
 
-        var escapedAttr: String {
-            return attr.stringByEncodingHTML
+    func getInfo(type: BBType) -> TagInfo? {
+        if type == .smilies {
+            return nil
         }
-
-        init(tag: TagInfo, parent: DOMNode?) {
-            self.tagType = tag.1
-            self.tagDescription = tag.2
-            self.parent = parent
+        for tag in tags {
+            if tag.1 == type {
+                return tag
+            }
         }
+        return nil
+    }
+}
 
-        func setTag(tag: TagInfo) {
-            self.tagType = tag.1
-            self.tagDescription = tag.2
-        }
+func newDOMNode(type: BBType, parent: DOMNode?, tagManager: TagManager) -> DOMNode {
+    if let tag = tagManager.getInfo(type: type) {
+        return DOMNode(tag: tag, parent: parent)
+    } else {
+        return DOMNode(tag: ("", .unknow, TagDescription(tagNeeded: false, isSelfClosing: false, allowedChildren: nil, allowAttr: false, isBlock: false, render: nil)), parent: parent)
+    }
+}
 
-        func renderChildren(_ args: [String: Any]?) -> String {
-            var html = ""
-            for n in children {
-                if let render = n.description?.render {
-                    html.append(render(n, args))
+func contentParser(g: inout USIterator, worker: Worker) -> Parser? {
+    var newNode: DOMNode = newDOMNode(type: .plain, parent: worker.currentNode, tagManager: worker.tagManager)
+    worker.currentNode.children.append(newNode)
+    var lastWasCR = false
+    while let c = g.next() {
+        if c == UnicodeScalar(10) || c == UnicodeScalar(13) {
+            if let allowedChildren = worker.currentNode.description?.allowedChildren, allowedChildren.contains(.br) {
+                if c == UnicodeScalar(13) || (c == UnicodeScalar(10) && !lastWasCR) {
+                    if newNode.value.isEmpty {
+                        worker.currentNode.children.removeLast()
+                    }
+                    newNode = newDOMNode(type: .br, parent: worker.currentNode, tagManager: worker.tagManager)
+                    worker.currentNode.children.append(newNode)
+                    newNode = newDOMNode(type: .plain, parent: worker.currentNode, tagManager: worker.tagManager)
+                    worker.currentNode.children.append(newNode)
                 }
-            }
-            return html
-        }
-    }
 
-    class TagDescription {
-        var tagNeeded: Bool
-        var isSelfClosing: Bool
-        var allowedChildren: [BBType]? // Allowed sub-elements of this element
-        var allowAttr: Bool
-        var isBlock: Bool
-        var render: Render?
-
-        init(tagNeeded: Bool, isSelfClosing: Bool, allowedChildren: [BBType]?, allowAttr: Bool, isBlock: Bool, render: Render?) {
-            self.tagNeeded = tagNeeded
-            self.isSelfClosing = isSelfClosing
-            self.allowedChildren = allowedChildren
-            self.allowAttr = allowAttr
-            self.isBlock = isBlock
-            self.render = render
-        }
-    }
-
-    enum BBType: Int {
-        case unknow = 0, root
-        case plain
-        case br
-        case paragraphStart, paragraphEnd
-        case quote, code, hide, url, image, flash, user, post, topic
-        case bold, italic, underline, delete, color, header
-        case smilies // one to many
-    }
-
-    class TagManager {
-        let tags: [TagInfo]
-
-        init(tags: [TagInfo]) {
-            var tmptags = tags
-
-
-
-            tmptags.sort(by: {a, b in
-                if a.0.characters.count > b.0.characters.count {
-                    return true
+                if c == UnicodeScalar(13) { // \r
+                    lastWasCR = true
+                } else { // \n
+                    lastWasCR = false
+                }
+            } else {
+                if worker.currentNode.type == .code {
+                    newNode.value.append(Character(c))
                 } else {
-                    return false
+                    worker.error = BBCodeError.unclosedTag(unclosedTagDetail(unclosedNode: worker.currentNode))
+                    return nil
                 }
-            })
-            self.tags = tmptags
-        }
+            }
+        } else {
+            lastWasCR = false
 
-        func getType(str: String) -> BBType? {
-            for tag in tags {
-                if tag.0 == str {
-                    return tag.1
+            if c == "[" { // <tag_start>
+                if worker.currentNode.description?.allowedChildren != nil {
+                    if newNode.value.isEmpty {
+                        worker.currentNode.children.removeLast()
+                    }
+                    return tag_parser
+                } else if !worker.currentNode.paired {
+                    return tag_parser
+                } else {
+                    newNode.value.append(Character(c))
                 }
+            } else { // <content>
+                newNode.value.append(Character(c))
             }
-            return nil
-        }
-
-        func getInfo(str: String) -> TagInfo? {
-            for tag in tags {
-                if tag.0 == str {
-                    return tag
-                }
-            }
-            return nil
-        }
-
-        func getInfo(type: BBType) -> TagInfo? {
-            if type == .smilies {
-                return nil
-            }
-            for tag in tags {
-                if tag.1 == type {
-                    return tag
-                }
-            }
-            return nil
         }
     }
 
-    var error: BBCodeError? = nil
+    return nil
+}
+
+func tagParser(g: inout USIterator, worker: Worker) -> Parser? {
+    //<opening_tag> ::= <opening_tag_1> | <opening_tag_2>
+    let newNode: DOMNode = newDOMNode(type: .unknow, parent: worker.currentNode, tagManager: worker.tagManager)
+    worker.currentNode.children.append(newNode)
+    var index: Int = 0
+    let tagNameMaxLength: Int = 8
+    var isFirst: Bool = true
+
+    while let c = g.next() {
+        if isFirst && c == "/" {
+            if !worker.currentNode.paired {
+                //<closing_tag> ::= <tag_start> '/' <tag_name> <tag_end>
+                worker.currentNode.children.removeLast()
+                return tag_close_parser
+            } else {
+                // illegal syntax, may be an unpaired closing tag, treat it as plain text
+                restoreNodeToPlain(node: newNode, c: c, worker: worker)
+                return content_parser
+            }
+        } else if c == "=" {
+            //<opening_tag_2> ::= <tag_prefix> '=' <attr> <tag_end>
+            if let tag = worker.tagManager.getInfo(str: newNode.value) {
+                newNode.setTag(tag: tag)
+                if let allowedChildren = worker.currentNode.description?.allowedChildren, allowedChildren.contains(newNode.type) {
+                    if (newNode.description?.allowAttr)! {
+                        newNode.paired = false //isSelfClosing tag has no attr, so its must be not paired
+                        worker.currentNode = newNode
+                        return attr_parser
+                    }
+                }
+            }
+            restoreNodeToPlain(node: newNode, c: c, worker: worker)
+            return content_parser
+        } else if c == "]" {
+            //<tag> ::= <opening_tag_1> | <opening_tag> <content> <closing_tag>
+            if let tag = worker.tagManager.getInfo(str: newNode.value) {
+                newNode.setTag(tag: tag)
+                if let allowedChildren = worker.currentNode.description?.allowedChildren, allowedChildren.contains(newNode.type) {
+                    if (newNode.description?.isSelfClosing)! {
+                        //<opening_tag_1> ::= <tag_prefix> <tag_end>
+                        return content_parser
+                    } else {
+                        //<opening_tag> <content> <closing_tag>
+                        newNode.paired = false
+                        worker.currentNode = newNode
+                        return content_parser
+                    }
+                }
+            }
+            restoreNodeToPlain(node: newNode, c: c, worker: worker)
+            return content_parser
+        } else if c == "[" {
+            // illegal syntax, treat it as plain text, and restart tag parsing from this new position
+            newNode.setTag(tag: worker.tagManager.getInfo(type: .plain)!)
+            newNode.value.insert(Character(UnicodeScalar(91)), at: newNode.value.startIndex)
+            return tag_parser
+        } else {
+            if index < tagNameMaxLength {
+                newNode.value.append(Character(c))
+            } else {
+                // no such tag
+                restoreNodeToPlain(node: newNode, c: c, worker: worker)
+                return content_parser
+            }
+        }
+        index = index + 1
+        isFirst = false
+    }
+
+    worker.error = BBCodeError.unfinishedOpeningTag(unclosedTagDetail(unclosedNode: worker.currentNode))
+    return nil
+}
+
+func attrParser(g: inout USIterator, worker: Worker) -> Parser? {
+    while let c = g.next() {
+        if c == "]" {
+            return content_parser
+        } else if c == UnicodeScalar(10) || c == UnicodeScalar(13) {
+            worker.error = BBCodeError.unfinishedAttr(unclosedTagDetail(unclosedNode: worker.currentNode))
+            return nil
+        } else {
+            worker.currentNode.attr.append(Character(c))
+        }
+    }
+
+    //unfinished attr
+    worker.error = BBCodeError.unfinishedAttr(unclosedTagDetail(unclosedNode: worker.currentNode))
+    return nil
+}
+
+func tagClosingParser(g: inout USIterator, worker: Worker) -> Parser? {
+    // <tag_name> <tag_end>
+    var tagName: String = ""
+    while let c = g.next() {
+        if c == "]" {
+            if !tagName.isEmpty && tagName == worker.currentNode.value {
+                worker.currentNode.paired = true
+                guard let p = worker.currentNode.parent else {
+                    // should not happen
+                    worker.error = BBCodeError.internalError("bug")
+                    return nil
+                }
+                worker.currentNode = p
+                return content_parser
+            } else {
+                if let allowedChildren = worker.currentNode.description?.allowedChildren {
+                    if let tag = worker.tagManager.getInfo(str: tagName) {
+                        if allowedChildren.contains(tag.1) {
+                            // not paired tag
+                            worker.error = BBCodeError.unpairedTag(unclosedTagDetail(unclosedNode: worker.currentNode))
+                            return nil
+                        }
+                    }
+                }
+
+                let newNode: DOMNode = newDOMNode(type: .plain, parent: worker.currentNode, tagManager: worker.tagManager)
+                newNode.value = "[/" + tagName + "]"
+                worker.currentNode.children.append(newNode)
+
+                return content_parser
+            }
+        } else if c == "[" {
+            // illegal syntax, treat it as plain text, and restart tag parsing from this new position
+            let newNode: DOMNode = newDOMNode(type: .plain, parent: worker.currentNode, tagManager: worker.tagManager)
+            newNode.value = "[/" + tagName
+            worker.currentNode.children.append(newNode)
+            return tag_parser
+        } else if c == "=" {
+            // illegal syntax, treat it as plain text
+            let newNode: DOMNode = newDOMNode(type: .plain, parent: worker.currentNode, tagManager: worker.tagManager)
+            newNode.value = "[/" + tagName + "="
+            worker.currentNode.children.append(newNode)
+            return content_parser
+        } else {
+            tagName.append(Character(c))
+        }
+    }
+
+    worker.error = BBCodeError.unfinishedClosingTag(unclosedTagDetail(unclosedNode: worker.currentNode))
+    return nil
+}
+
+func restoreNodeToPlain(node: DOMNode, c: UnicodeScalar, worker: Worker) {
+    node.setTag(tag: worker.tagManager.getInfo(type: .plain)!)
+    node.value.insert(Character(UnicodeScalar(91)), at: node.value.startIndex)
+    node.value.append(Character(c))
+}
+
+func handleNewlineAndParagraph(node: DOMNode, tagManager: TagManager) {
+    // The end tag may be omitted if the <p> element is immediately followed by an <address>, <article>, <aside>, <blockquote>, <div>, <dl>, <fieldset>, <footer>, <form>, <h1>, <h2>, <h3>, <h4>, <h5>, <h6>, <header>, <hr>, <menu>, <nav>, <ol>, <pre>, <section>, <table>, <ul> or another <p> element, or if there is no more content in the parent element and the parent element is not an <a> element.
+
+    // Trim head "br"s
+    while node.children.first?.type == .br {
+        node.children.removeFirst()
+    }
+    // Trim tail "br"s
+    while node.children.last?.type == .br {
+        node.children.removeLast()
+    }
+
+    let currentIsBlock = node.description?.isBlock ?? false
+    if currentIsBlock && !(node.children.first?.description?.isBlock ?? false) && node.type != .code {
+        node.children.insert(newDOMNode(type: .paragraphStart, parent: node, tagManager: tagManager), at: 0)
+    }
+
+    var brCount = 0
+    var previous: DOMNode? = nil
+    var previousOfPrevious: DOMNode? = nil
+    var previousIsBlock: Bool = false
+    for n in node.children {
+        let isBlock = n.description?.isBlock ?? false
+        if n.type == .br {
+            if previousIsBlock {
+                n.setTag(tag: tagManager.getInfo(type: .plain)!)
+                previousIsBlock = false
+            } else {
+                previousOfPrevious = previous
+                previous = n
+                brCount = brCount + 1
+            }
+        } else {
+            if brCount >= 2 && currentIsBlock { // only block element can contain paragraphs
+                previousOfPrevious!.setTag(tag: tagManager.getInfo(type: .paragraphEnd)!)
+                previous!.setTag(tag: tagManager.getInfo(type: .paragraphStart)!)
+            }
+            brCount = 0
+            previous = nil
+            previousOfPrevious = nil
+
+            handleNewlineAndParagraph(node: n, tagManager: tagManager)
+        }
+
+        previousIsBlock = isBlock
+    }
+}
+
+// For unclosed tag error handling
+func unclosedTagDetail(unclosedNode: DOMNode) -> String {
+    if unclosedNode.type == .root {
+        // should not be here
+        return ""
+    }
+    var text: String = "[" + unclosedNode.value + (unclosedNode.attr.isEmpty ? "]" : "=" + unclosedNode.attr + "]")
+    for child in unclosedNode.children {
+        text = text + nodeContext(node: child)
+    }
+    return text
+}
+
+// Called by unclosedTagDetail
+func nodeContext(node: DOMNode) -> String {
+    if node.type == .root {
+        // should not be here
+        return ""
+    } else if node.type == .plain {
+        return node.value
+    } else {
+        if let desc = node.description, desc.isSelfClosing {
+            return "[" + node.value + "]"
+        } else {
+            var text: String = "[" + node.value + (node.attr.isEmpty ? "]" : "=" + node.attr + "]")
+            for child in node.children {
+                text = text + nodeContext(node: child)
+            }
+            text = text + "[/" + node.value + "]"
+
+            return text
+        }
+    }
+}
+
+let content_parser: Parser = Parser(parse: contentParser)
+let tag_parser: Parser = Parser(parse: tagParser)
+let tag_close_parser: Parser = Parser(parse: tagClosingParser)
+let attr_parser: Parser = Parser(parse: attrParser)
+
+public class BBCode {
 
     let tagManager: TagManager
-    
-    var currentParser: Parser?
-    var content_parser: Parser?
-    var tag_parser: Parser?
-    var tag_close_parser: Parser?
-    var attr_parser: Parser?
-    
-    var currentNode: DOMNode
-    
+
     public init() {
-        self.currentParser = Parser(parse: {_ in return nil})
-        self.currentNode = DOMNode(tag: ("", .unknow, TagDescription(tagNeeded: false, isSelfClosing: false, allowedChildren: nil, allowAttr: false, isBlock: false, render: nil)), parent: nil)
         var tags: [TagInfo] = [
             ("", .plain,
              TagDescription(tagNeeded: false, isSelfClosing: true,
@@ -503,328 +817,24 @@ public class BBCode {
         self.tagManager = TagManager(tags: tags);
     }
 
-    private func newDOMNode(type: BBType, parent: DOMNode?) -> DOMNode {
-        if let tag = tagManager.getInfo(type: type) {
-            return DOMNode(tag: tag, parent: parent)
-        } else {
-            return DOMNode(tag: ("", .unknow, TagDescription(tagNeeded: false, isSelfClosing: false, allowedChildren: nil, allowAttr: false, isBlock: false, render: nil)), parent: parent)
-        }
-    }
-    
-    func contentParser(g: inout USIterator) -> Parser? {
-        var newNode: DOMNode = newDOMNode(type: .plain, parent: currentNode)
-        currentNode.children.append(newNode)
-        var lastWasCR = false
-        while let c = g.next() {
-            if c == UnicodeScalar(10) || c == UnicodeScalar(13) {
-                if let allowedChildren = currentNode.description?.allowedChildren, allowedChildren.contains(.br) {
-                    if c == UnicodeScalar(13) || (c == UnicodeScalar(10) && !lastWasCR) {
-                        if newNode.value.isEmpty {
-                            currentNode.children.removeLast()
-                        }
-                        newNode = newDOMNode(type: .br, parent: currentNode)
-                        currentNode.children.append(newNode)
-                        newNode = newDOMNode(type: .plain, parent: currentNode)
-                        currentNode.children.append(newNode)
-                    }
 
-                    if c == UnicodeScalar(13) { // \r
-                        lastWasCR = true
-                    } else { // \n
-                        lastWasCR = false
-                    }
-                } else {
-                    if currentNode.type == .code {
-                        newNode.value.append(Character(c))
-                    } else {
-                        error = BBCodeError.unclosedTag(unclosedTagDetail(unclosedNode: currentNode))
-                        return nil
-                    }
-                }
-            } else {
-                lastWasCR = false
-
-                if c == "[" { // <tag_start>
-                    if currentNode.description?.allowedChildren != nil {
-                        if newNode.value.isEmpty {
-                            currentNode.children.removeLast()
-                        }
-                        return tag_parser
-                    } else if !currentNode.paired {
-                        return tag_parser
-                    } else {
-                        newNode.value.append(Character(c))
-                    }
-                } else { // <content>
-                    newNode.value.append(Character(c))
-                }
-            }
-        }
-
-        return nil
-    }
-    
-    func tagParser(g: inout USIterator) -> Parser? {
-        //<opening_tag> ::= <opening_tag_1> | <opening_tag_2>
-        let newNode: DOMNode = newDOMNode(type: .unknow, parent: currentNode)
-        currentNode.children.append(newNode)
-        var index: Int = 0
-        let tagNameMaxLength: Int = 8
-        var isFirst: Bool = true
-
-        while let c = g.next() {
-            if isFirst && c == "/" {
-                if !currentNode.paired {
-                    //<closing_tag> ::= <tag_start> '/' <tag_name> <tag_end>
-                    currentNode.children.removeLast()
-                    return tag_close_parser
-                } else {
-                    // illegal syntax, may be an unpaired closing tag, treat it as plain text
-                    restoreNodeToPlain(node: newNode, c: c)
-                    return content_parser
-                }
-            } else if c == "=" {
-                //<opening_tag_2> ::= <tag_prefix> '=' <attr> <tag_end>
-                if let tag = tagManager.getInfo(str: newNode.value) {
-                    newNode.setTag(tag: tag)
-                    if let allowedChildren = currentNode.description?.allowedChildren, allowedChildren.contains(newNode.type) {
-                        if (newNode.description?.allowAttr)! {
-                            newNode.paired = false //isSelfClosing tag has no attr, so its must be not paired
-                            currentNode = newNode
-                            return attr_parser
-                        }
-                    }
-                }
-                restoreNodeToPlain(node: newNode, c: c)
-                return content_parser
-            } else if c == "]" {
-                //<tag> ::= <opening_tag_1> | <opening_tag> <content> <closing_tag>
-                if let tag = tagManager.getInfo(str: newNode.value) {
-                    newNode.setTag(tag: tag)
-                    if let allowedChildren = currentNode.description?.allowedChildren, allowedChildren.contains(newNode.type) {
-                        if (newNode.description?.isSelfClosing)! {
-                            //<opening_tag_1> ::= <tag_prefix> <tag_end>
-                            return content_parser
-                        } else {
-                            //<opening_tag> <content> <closing_tag>
-                            newNode.paired = false
-                            currentNode = newNode
-                            return content_parser
-                        }
-                    }
-                }
-                restoreNodeToPlain(node: newNode, c: c)
-                return content_parser
-            } else if c == "[" {
-                // illegal syntax, treat it as plain text, and restart tag parsing from this new position
-                newNode.setTag(tag: tagManager.getInfo(type: .plain)!)
-                newNode.value.insert(Character(UnicodeScalar(91)), at: newNode.value.startIndex)
-                return tag_parser
-            } else {
-                if index < tagNameMaxLength {
-                    newNode.value.append(Character(c))
-                } else {
-                    // no such tag
-                    restoreNodeToPlain(node: newNode, c: c)
-                    return content_parser
-                }
-            }
-            index = index + 1
-            isFirst = false
-        }
-
-        error = BBCodeError.unfinishedOpeningTag(unclosedTagDetail(unclosedNode: currentNode))
-        return nil
-    }
-    
-    func attrParser(g: inout USIterator) -> Parser? {
-        while let c = g.next() {
-            if c == "]" {
-                return content_parser
-            } else if c == UnicodeScalar(10) || c == UnicodeScalar(13) {
-                error = BBCodeError.unfinishedAttr(unclosedTagDetail(unclosedNode: currentNode))
-                return nil
-            } else {
-                currentNode.attr.append(Character(c))
-            }
-        }
-
-        //unfinished attr
-        error = BBCodeError.unfinishedAttr(unclosedTagDetail(unclosedNode: currentNode))
-        return nil
-    }
-
-    func tagClosingParser(g: inout USIterator) -> Parser? {
-        // <tag_name> <tag_end>
-        var tagName: String = ""
-        while let c = g.next() {
-            if c == "]" {
-                if !tagName.isEmpty && tagName == currentNode.value {
-                    currentNode.paired = true
-                    guard let p = currentNode.parent else {
-                        // should not happen
-                        error = BBCodeError.internalError("bug")
-                        return nil
-                    }
-                    currentNode = p
-                    return content_parser
-                } else {
-                    if let allowedChildren = currentNode.description?.allowedChildren {
-                        if let tag = tagManager.getInfo(str: tagName) {
-                            if allowedChildren.contains(tag.1) {
-                                // not paired tag
-                                error = BBCodeError.unpairedTag(unclosedTagDetail(unclosedNode: currentNode))
-                                return nil
-                            }
-                        }
-                    }
-
-                    let newNode: DOMNode = newDOMNode(type: .plain, parent: currentNode)
-                    newNode.value = "[/" + tagName + "]"
-                    currentNode.children.append(newNode)
-
-                    return content_parser
-                }
-            } else if c == "[" {
-                // illegal syntax, treat it as plain text, and restart tag parsing from this new position
-                let newNode: DOMNode = newDOMNode(type: .plain, parent: currentNode)
-                newNode.value = "[/" + tagName
-                currentNode.children.append(newNode)
-                return tag_parser
-            } else if c == "=" {
-                // illegal syntax, treat it as plain text
-                let newNode: DOMNode = newDOMNode(type: .plain, parent: currentNode)
-                newNode.value = "[/" + tagName + "="
-                currentNode.children.append(newNode)
-                return content_parser
-            } else {
-                tagName.append(Character(c))
-            }
-        }
-
-        error = BBCodeError.unfinishedClosingTag(unclosedTagDetail(unclosedNode: currentNode))
-        return nil
-    }
-    
-    func restoreNodeToPlain(node: DOMNode, c: UnicodeScalar) {
-        node.setTag(tag: tagManager.getInfo(type: .plain)!)
-        node.value.insert(Character(UnicodeScalar(91)), at: node.value.startIndex)
-        node.value.append(Character(c))
-    }
-
-    func handleNewlineAndParagraph(node: DOMNode) {
-        // The end tag may be omitted if the <p> element is immediately followed by an <address>, <article>, <aside>, <blockquote>, <div>, <dl>, <fieldset>, <footer>, <form>, <h1>, <h2>, <h3>, <h4>, <h5>, <h6>, <header>, <hr>, <menu>, <nav>, <ol>, <pre>, <section>, <table>, <ul> or another <p> element, or if there is no more content in the parent element and the parent element is not an <a> element.
-
-        // Trim head "br"s
-        while node.children.first?.type == .br {
-            node.children.removeFirst()
-        }
-        // Trim tail "br"s
-        while node.children.last?.type == .br {
-            node.children.removeLast()
-        }
-
-        let currentIsBlock = node.description?.isBlock ?? false
-        if currentIsBlock && !(node.children.first?.description?.isBlock ?? false) && node.type != .code {
-            node.children.insert(newDOMNode(type: .paragraphStart, parent: node), at: 0)
-        }
-
-        var brCount = 0
-        var previous: DOMNode? = nil
-        var previousOfPrevious: DOMNode? = nil
-        var previousIsBlock: Bool = false
-        for n in node.children {
-            let isBlock = n.description?.isBlock ?? false
-            if n.type == .br {
-                if previousIsBlock {
-                    n.setTag(tag: tagManager.getInfo(type: .plain)!)
-                    previousIsBlock = false
-                } else {
-                    previousOfPrevious = previous
-                    previous = n
-                    brCount = brCount + 1
-                }
-            } else {
-                if brCount >= 2 && currentIsBlock { // only block element can contain paragraphs
-                    previousOfPrevious!.setTag(tag: tagManager.getInfo(type: .paragraphEnd)!)
-                    previous!.setTag(tag: tagManager.getInfo(type: .paragraphStart)!)
-                }
-                brCount = 0
-                previous = nil
-                previousOfPrevious = nil
-
-                handleNewlineAndParagraph(node: n)
-            }
-
-            previousIsBlock = isBlock
-        }
-    }
-
-    // For unclosed tag error handling
-    func unclosedTagDetail(unclosedNode: DOMNode) -> String {
-        if unclosedNode.type == .root {
-            // should not be here
-            return ""
-        }
-        var text: String = "[" + unclosedNode.value + (unclosedNode.attr.isEmpty ? "]" : "=" + unclosedNode.attr + "]")
-        for child in unclosedNode.children {
-            text = text + nodeContext(node: child)
-        }
-        return text
-    }
-
-    // Called by unclosedTagDetail
-    func nodeContext(node: DOMNode) -> String {
-        if node.type == .root {
-            // should not be here
-            return ""
-        } else if node.type == .plain {
-            return node.value
-        } else {
-            if let desc = node.description, desc.isSelfClosing {
-                return "[" + node.value + "]"
-            } else {
-                var text: String = "[" + node.value + (node.attr.isEmpty ? "]" : "=" + node.attr + "]")
-                for child in node.children {
-                    text = text + nodeContext(node: child)
-                }
-                text = text + "[/" + node.value + "]"
-
-                return text
-            }
-        }
-    }
 
     public func parse(bbcode: String) throws -> String {
         return try parse(bbcode: bbcode, args: nil)
     }
     
     public func parse(bbcode: String, args: [String: Any]?) throws -> String {
-        var g: USIterator = bbcode.unicodeScalars.makeIterator()
-        self.content_parser = Parser(parse: contentParser)
-        self.tag_parser = Parser(parse: tagParser)
-        self.attr_parser = Parser(parse: attrParser)
-        self.tag_close_parser = Parser(parse: tagClosingParser)
-        error = nil
-        currentParser = content_parser
-        currentNode = newDOMNode(type: .root, parent: nil)
+        let worker: Worker = Worker(tagManager: tagManager)
 
-        repeat {
-            currentParser = currentParser?.parse(&g)
-        } while currentParser != nil
+        try worker.parse(bbcode)
 
-        if error != nil {
-            throw error!
-        }
-
-        if currentNode.type != .root {
-            throw BBCodeError.unclosedTag(unclosedTagDetail(unclosedNode: currentNode))
+        if worker.currentNode.type != .root {
+            throw BBCodeError.unclosedTag(unclosedTagDetail(unclosedNode: worker.currentNode))
         } else {
-            handleNewlineAndParagraph(node: currentNode)
-            return (currentNode.description!.render!(currentNode, args))
+            handleNewlineAndParagraph(node: worker.currentNode, tagManager: tagManager)
+            return (worker.currentNode.description!.render!(worker.currentNode, args))
         }
     }
-
 }
 
 

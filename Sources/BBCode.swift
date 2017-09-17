@@ -485,6 +485,27 @@ func nodeContext(node: DOMNode) -> String {
     }
 }
 
+func safeUrl(url: String, defaultScheme: String?, defaultHost: String?) -> String? {
+    if var components = URLComponents(string: url) {
+        if components.scheme == nil {
+            if defaultScheme != nil {
+                components.scheme = defaultScheme!
+            } else {
+                return nil
+            }
+        }
+        if components.host == nil {
+            if defaultHost != nil {
+                components.host = defaultHost!
+            } else {
+                return nil
+            }
+        }
+        return components.url?.absoluteString
+    }
+    return nil
+}
+
 let content_parser: Parser = Parser(parse: contentParser)
 let tag_parser: Parser = Parser(parse: tagParser)
 let tag_close_parser: Parser = Parser(parse: tagClosingParser)
@@ -579,6 +600,8 @@ public class BBCode {
                             allowedChildren: [.image],
                             allowAttr: true, isBlock: false,
                             render: { (n: DOMNode, args: [String: Any]?) in
+                                let scheme = args?["current_scheme"] as? String ?? "http"
+                                let host = args?["host"] as? String
                                 var html: String
                                 var link: String
                                 if n.attr.isEmpty {
@@ -590,8 +613,8 @@ public class BBCode {
                                     }
                                     if isPlain {
                                         link = n.renderChildren(args)
-                                        if link.isLink {
-                                            html = "<a href=\"\(link)\" rel=\"nofollow\">\(link)</a>"
+                                        if let safeLink = safeUrl(url: link, defaultScheme: scheme, defaultHost: host) {
+                                            html = "<a href=\"\(link)\" rel=\"nofollow\">\(safeLink)</a>"
                                         } else {
                                             html = link
                                         }
@@ -600,8 +623,8 @@ public class BBCode {
                                     }
                                 } else {
                                     link = n.escapedAttr
-                                    if link.isLink {
-                                        html = "<a href=\"\(link)\" rel=\"nofollow\">\(n.renderChildren(args))</a>"
+                                    if let safeLink = safeUrl(url: link, defaultScheme: scheme, defaultHost: host) {
+                                        html = "<a href=\"\(safeLink)\" rel=\"nofollow\">\(n.renderChildren(args))</a>"
                                     } else {
                                         html = n.renderChildren(args)
                                     }
@@ -612,19 +635,21 @@ public class BBCode {
             ("img", .image,
              TagDescription(tagNeeded: true, isSelfClosing: false, allowedChildren: nil, allowAttr: true, isBlock: false,
                             render: { (n: DOMNode, args: [String: Any]?) in
+                                let scheme = args?["current_scheme"] as? String ?? "http"
+                                let host = args?["host"] as? String
                                 var html: String
                                 let link: String = n.renderChildren(args)
-                                if n.attr.isEmpty {
-                                    html = "<span class=\"postimg\"><img src=\"\(link)\" alt=\"\" /></span>"
-                                } else {
-                                    let values = n.attr.components(separatedBy: ",").flatMap { Int($0) }
-                                    if values.count == 2 && values[0] > 0 && values[0] <= 4096 && values[1] > 0 && values[1] <= 4096 {
-                                        html = "<span class=\"postimg\"><img src=\"\(link)\" alt=\"\" width=\"\(values[0])\" height=\"\(values[1])\" /></span>"
+                                if let safeLink = safeUrl(url: link, defaultScheme: scheme, defaultHost: host) {
+                                    if n.attr.isEmpty {
+                                        html = "<span class=\"postimg\"><img src=\"\(safeLink)\" alt=\"\" /></span>"
                                     } else {
-                                        html = "<span class=\"postimg\"><img src=\"\(link)\" alt=\"\(n.escapedAttr)\" /></span>"
+                                        let values = n.attr.components(separatedBy: ",").flatMap { Int($0) }
+                                        if values.count == 2 && values[0] > 0 && values[0] <= 4096 && values[1] > 0 && values[1] <= 4096 {
+                                            html = "<span class=\"postimg\"><img src=\"\(safeLink)\" alt=\"\" width=\"\(values[0])\" height=\"\(values[1])\" /></span>"
+                                        } else {
+                                            html = "<span class=\"postimg\"><img src=\"\(safeLink)\" alt=\"\(n.escapedAttr)\" /></span>"
+                                        }
                                     }
-                                }
-                                if link.isLink {
                                     return html
                                 } else {
                                     return link
@@ -895,19 +920,5 @@ extension String {
             }
         }
         return ret
-    }
-
-    var isLink: Bool {
-    #if os(Linux)
-        return true //TODO
-    #else
-        let types: NSTextCheckingResult.CheckingType = [.link]
-        let detector = try? NSDataDetector(types: types.rawValue)
-        guard (detector != nil && self.characters.count > 0) else { return false }
-        if detector!.numberOfMatches(in: self, options: NSRegularExpression.MatchingOptions(rawValue: 0), range: NSMakeRange(0, self.characters.count)) > 0 {
-            return true
-        }
-        return false
-    #endif
     }
 }

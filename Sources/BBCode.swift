@@ -663,14 +663,14 @@ public class BBCode {
                                 if n.attr.isEmpty {
                                     userIdStr = n.renderChildren(args)
                                     if let userId = UInt32(userIdStr) {
-                                        return "<a href=\"/forum/user/\(userId)\">/forum/user/\(userId)</a>"
+                                        return "<a href=\"/user/\(userId)\">/user/\(userId)</a>"
                                     } else {
                                         return "[user]" + userIdStr + "[/user]"
                                     }
                                 } else {
                                     let text = n.renderChildren(args)
                                     if let userId = UInt32(n.attr) {
-                                        return "<a href=\"/forum/user/\(userId)\">\(text)</a>"
+                                        return "<a href=\"/user/\(userId)\">\(text)</a>"
                                     } else {
                                         return "[user=\(n.escapedAttr)]\(text)[/user]"
                                     }
@@ -684,14 +684,14 @@ public class BBCode {
                                 if n.attr.isEmpty {
                                     postIdStr = n.renderChildren(args)
                                     if let postId = UInt32(postIdStr) {
-                                        return "<a href=\"/forum/post/\(postId)\">/forum/post/\(postId)</a>"
+                                        return "<a href=\"/post/\(postId)#\(postId)\">/post/\(postId)</a>"
                                     } else {
                                         return "[post]" + postIdStr + "[/post]"
                                     }
                                 } else {
                                     let text = n.renderChildren(args)
                                     if let postId = UInt32(n.attr) {
-                                        return "<a href=\"/forum/post/\(postId)\">\(text)</a>"
+                                        return "<a href=\"/post/\(postId)#\(postId)\">\(text)</a>"
                                     } else {
                                         return "[post=\(n.escapedAttr)]\(text)[/post]"
                                     }
@@ -705,14 +705,14 @@ public class BBCode {
                                 if n.attr.isEmpty {
                                     idStr = n.renderChildren(args)
                                     if let id = UInt32(idStr) {
-                                        return "<a href=\"/forum/topic/\(id)\">/forum/topic/\(id)</a>"
+                                        return "<a href=\"/topic/\(id)\">/topic/\(id)</a>"
                                     } else {
                                         return "[topic]" + idStr + "[/topic]"
                                     }
                                 } else {
                                     let text = n.renderChildren(args)
                                     if let id = UInt32(n.attr) {
-                                        return "<a href=\"/forum/topic/\(id)\">\(text)</a>"
+                                        return "<a href=\"/topic/\(id)\">\(text)</a>"
                                     } else {
                                         return "[topic=\(n.escapedAttr)]\(text)[/topic]"
                                     }

@@ -43,12 +43,12 @@ class BBCodeTests: XCTestCase {
     }
 
     func testUser() {
-        XCTAssertEqual(try BBCode().parse(bbcode: "[user=2]Test user[/user]"), "<p><a href=\"/forum/user/2\">Test user</a>")
-        XCTAssertEqual(try BBCode().parse(bbcode: "[user]2[/user]"), "<p><a href=\"/forum/user/2\">/forum/user/2</a>")
-        XCTAssertEqual(try BBCode().parse(bbcode: "[topic=2]Test topic[/topic]"), "<p><a href=\"/forum/topic/2\">Test topic</a>")
-        XCTAssertEqual(try BBCode().parse(bbcode: "[topic]2[/topic]"), "<p><a href=\"/forum/topic/2\">/forum/topic/2</a>")
-        XCTAssertEqual(try BBCode().parse(bbcode: "[post=2]Test post[/post]"), "<p><a href=\"/forum/post/2\">Test post</a>")
-        XCTAssertEqual(try BBCode().parse(bbcode: "[post]2[/post]"), "<p><a href=\"/forum/post/2\">/forum/post/2</a>")
+        XCTAssertEqual(try BBCode().parse(bbcode: "[user=2]Test user[/user]"), "<p><a href=\"/user/2\">Test user</a>")
+        XCTAssertEqual(try BBCode().parse(bbcode: "[user]2[/user]"), "<p><a href=\"/user/2\">/user/2</a>")
+        XCTAssertEqual(try BBCode().parse(bbcode: "[topic=2]Test topic[/topic]"), "<p><a href=\"/topic/2\">Test topic</a>")
+        XCTAssertEqual(try BBCode().parse(bbcode: "[topic]2[/topic]"), "<p><a href=\"/topic/2\">/topic/2</a>")
+        XCTAssertEqual(try BBCode().parse(bbcode: "[post=2]Test post[/post]"), "<p><a href=\"/post/2#2\">Test post</a>")
+        XCTAssertEqual(try BBCode().parse(bbcode: "[post]2[/post]"), "<p><a href=\"/post/2#2\">/post/2</a>")
     }
 
     func testCode() {

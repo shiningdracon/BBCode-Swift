@@ -31,6 +31,9 @@ class BBCodeTests: XCTestCase {
         XCTAssertEqual(try BBCode().parse(bbcode: "[img]http://example.com/1.jpg[/img]"), "<p><span class=\"postimg\"><img src=\"http://example.com/1.jpg\" alt=\"\" /></span>")
         XCTAssertEqual(try BBCode().parse(bbcode: "[img=gugu,alt]http://example.com/1.jpg[/img]"), "<p><span class=\"postimg\"><img src=\"http://example.com/1.jpg\" alt=\"gugu,alt\" /></span>")
         XCTAssertEqual(try BBCode().parse(bbcode: "[img=300,500]http://example.com/1.jpg[/img]"), "<p><span class=\"postimg\"><img src=\"http://example.com/1.jpg\" alt=\"\" width=\"300\" height=\"500\" /></span>")
+
+        XCTAssertEqual(try BBCode().parse(bbcode: "[video]http://example.com/1.mp4[/video]"), "<p><span class=\"postimg\"><video src=\"http://example.com/1.mp4\" autoplay loop muted><a href=\"http://example.com/1.mp4\">Download</a></video></span>")
+        XCTAssertEqual(try BBCode().parse(bbcode: "[video=300,500]http://example.com/1.mp4[/video]"), "<p><span class=\"postimg\"><video src=\"http://example.com/1.mp4\" width=\"300\" height=\"500\" autoplay loop muted><a href=\"http://example.com/1.mp4\">Download</a></video></span>")
     }
 
     func testQuote() {

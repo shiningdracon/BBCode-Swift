@@ -139,7 +139,7 @@ enum BBType: Int {
     case plain
     case br
     case paragraphStart, paragraphEnd
-    case quote, code, hide, url, image, flash, user, post, topic
+    case quote, code, hide, url, image, video, flash, user, post, topic
     case bold, italic, underline, delete, color, header
     case smilies // one to many
 }
@@ -648,6 +648,30 @@ public class BBCode {
                                             html = "<span class=\"postimg\"><img src=\"\(safeLink)\" alt=\"\" width=\"\(values[0])\" height=\"\(values[1])\" /></span>"
                                         } else {
                                             html = "<span class=\"postimg\"><img src=\"\(safeLink)\" alt=\"\(n.escapedAttr)\" /></span>"
+                                        }
+                                    }
+                                    return html
+                                } else {
+                                    return link
+                                }
+             })
+            ),
+            ("video", .video,
+             TagDescription(tagNeeded: true, isSelfClosing: false, allowedChildren: nil, allowAttr: true, isBlock: false,
+                            render: { (n: DOMNode, args: [String: Any]?) in
+                                let scheme = args?["current_scheme"] as? String ?? "http"
+                                let host = args?["host"] as? String
+                                var html: String
+                                let link: String = n.renderChildren(args)
+                                if let safeLink = safeUrl(url: link, defaultScheme: scheme, defaultHost: host) {
+                                    if n.attr.isEmpty {
+                                        html = "<span class=\"postimg\"><video src=\"\(safeLink)\" autoplay loop muted><a href=\"\(safeLink)\">Download</a></video></span>"
+                                    } else {
+                                        let values = n.attr.components(separatedBy: ",").flatMap { Int($0) }
+                                        if values.count == 2 && values[0] > 0 && values[0] <= 4096 && values[1] > 0 && values[1] <= 4096 {
+                                            html = "<span class=\"postimg\"><video src=\"\(safeLink)\" width=\"\(values[0])\" height=\"\(values[1])\" autoplay loop muted><a href=\"\(safeLink)\">Download</a></video></span>"
+                                        } else {
+                                            html = "<span class=\"postimg\"><video src=\"\(safeLink)\" autoplay loop muted><a href=\"\(safeLink)\">Download</a></video></span>"
                                         }
                                     }
                                     return html

@@ -80,10 +80,15 @@ class BBCodeTests: XCTestCase {
         XCTAssertEqual(try BBCode().parse(bbcode: "[hide]text content[/hide]", args: ["post number": 2]), "<div class=\"quotebox\"><cite>Hidden text</cite><blockquote><div><p>text content</div></blockquote></div>")
     }
 
+    let performanceTestString = "I would like to [b]emphasize[/b] this\nMaking text [i]italic[/i] italic is kind of easy\nu is used for the [u]underline[/u] tag\nI [s]had been[/s] was born in Denmark\n\nIt is possible to color the text [color=red]red[/color] [color=green]green[/color] [color=blue]blue[/color] -\nor [color=#DB7900]whatever[/color]\n\nQuoting no-one in particular\n[quote]'Tis be a bad day[/quote]\nQuoting someone in particular\n[quote=Bjarne]This be the day of days![/quote]\n\nLinking with no link title\n[url]https://www.bbcode.org/[/url]\nLinking to a named site\n[url=https://www.bbcode.org/]This be bbcode.org![/url]\n\nIncluding an image\n[img]https://www.bbcode.org/images/lubeck_small.jpg[/img]\nResizing the image\n[img=100x50]https://www.bbcode.org/images/lubeck_small.jpg[/img]\nMaking the image clickable (in this case linking to the original image)\n[url=https://www.bbcode.org/images/lubeck.jpg][img]https://www.bbcode.org/images/lubeck_small.jpg[/img][/url]\n\n[code]\n$b = \"hello world\";\necho $b;\n[/code]"
+
     func testPerformance() {
         self.measure({
+            let bbcode = BBCode()
             do {
-                _ = try BBCode().parse(bbcode: "I would like to [b]emphasize[/b] this\nMaking text [i]italic[/i] italic is kind of easy\nu is used for the [u]underline[/u] tag\nI [s]had been[/s] was born in Denmark\n\nIt is possible to color the text [color=red]red[/color] [color=green]green[/color] [color=blue]blue[/color] -\nor [color=#DB7900]whatever[/color]\n\nQuoting no-one in particular\n[quote]'Tis be a bad day[/quote]\nQuoting someone in particular\n[quote=Bjarne]This be the day of days![/quote]\n\nLinking with no link title\n[url]https://www.bbcode.org/[/url]\nLinking to a named site\n[url=https://www.bbcode.org/]This be bbcode.org![/url]\n\nIncluding an image\n[img]https://www.bbcode.org/images/lubeck_small.jpg[/img]\nResizing the image\n[img=100x50]https://www.bbcode.org/images/lubeck_small.jpg[/img]\nMaking the image clickable (in this case linking to the original image)\n[url=https://www.bbcode.org/images/lubeck.jpg][img]https://www.bbcode.org/images/lubeck_small.jpg[/img][/url]\n\n[code]\n$b = \"hello world\";\necho $b;\n[/code]")
+                for _ in 1...100 {
+                    _ = try bbcode.parse(bbcode: performanceTestString)
+                }
             } catch {
 
             }
@@ -92,11 +97,72 @@ class BBCodeTests: XCTestCase {
 
     func testPerformanceParse() {
         self.measure({
+            let bbcode = BBCode()
             do {
-                _ = try BBCode().validate(bbcode: "I would like to [b]emphasize[/b] this\nMaking text [i]italic[/i] italic is kind of easy\nu is used for the [u]underline[/u] tag\nI [s]had been[/s] was born in Denmark\n\nIt is possible to color the text [color=red]red[/color] [color=green]green[/color] [color=blue]blue[/color] -\nor [color=#DB7900]whatever[/color]\n\nQuoting no-one in particular\n[quote]'Tis be a bad day[/quote]\nQuoting someone in particular\n[quote=Bjarne]This be the day of days![/quote]\n\nLinking with no link title\n[url]https://www.bbcode.org/[/url]\nLinking to a named site\n[url=https://www.bbcode.org/]This be bbcode.org![/url]\n\nIncluding an image\n[img]https://www.bbcode.org/images/lubeck_small.jpg[/img]\nResizing the image\n[img=100x50]https://www.bbcode.org/images/lubeck_small.jpg[/img]\nMaking the image clickable (in this case linking to the original image)\n[url=https://www.bbcode.org/images/lubeck.jpg][img]https://www.bbcode.org/images/lubeck_small.jpg[/img][/url]\n\n[code]\n$b = \"hello world\";\necho $b;\n[/code]")
+                for _ in 1...100 {
+                    _ = try bbcode.validate(bbcode: performanceTestString)
+                }
             } catch {
 
             }
         })
+    }
+
+    func testString4() {
+        self.measure {
+            let str = performanceTestString
+            for _ in 1...10000 {
+                var g = str.unicodeScalars.makeIterator()
+                var value: [Unicode.Scalar] = []
+                while let c = g.next() {
+                    value.append(c)
+                }
+            }
+        }
+    }
+
+    func testString5() {
+        self.measure {
+            let str = performanceTestString
+            for _ in 1...10000 {
+                var value = ""
+                let view = str.unicodeScalars
+                var index = view.startIndex
+                while index < view.endIndex {
+                    let c = view[index]
+                    //value.append(Character(c))
+                    view.formIndex(after: &index)
+                }
+                let substr = str[str.startIndex..<str.endIndex]
+            }
+        }
+    }
+
+    func testString6() {
+        self.measure {
+            let str = performanceTestString
+            var data = str.data(using: String.Encoding.utf8)!
+            var value = Array<UInt8>()
+            for _ in 1...10000 {
+                for c in data {
+                    value.append(c)
+                }
+            }
+        }
+    }
+
+    func testString7() {
+        self.measure {
+            let str = performanceTestString
+            var data = str.data(using: String.Encoding.utf8)!
+            let buff = UnsafeMutablePointer<UInt8>.allocate(capacity: data.count)
+            for _ in 1...10000 {
+                data.withUnsafeBytes({ (ptr: UnsafePointer<UInt8>) -> Void in
+                    for i in 0..<data.count {
+                        buff[i] = ptr[i]
+                    }
+                })
+            }
+        }
     }
 }

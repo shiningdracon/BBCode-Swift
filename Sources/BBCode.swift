@@ -38,12 +38,12 @@ class USIterator {
     init(start: UnsafeMutablePointer<UInt8>, length: Int) {
         startPtr = start
         endPtr = start + length
-        curPtr = start
+        curPtr = start - 1
     }
 
     func next() -> UInt8? {
-        curPtr = curPtr + 1
-        if curPtr < endPtr {
+        if curPtr < endPtr - 1 {
+            curPtr = curPtr + 1
             return (curPtr).pointee
         } else {
             return nil
@@ -94,40 +94,83 @@ class Worker {
 }
 
 class BBString {
-    var startPtr: UnsafeMutablePointer<UInt8>
-    var endPtr: UnsafeMutablePointer<UInt8>
+    var startPtr: UnsafeMutablePointer<UInt8>?
+    var endPtr: UnsafeMutablePointer<UInt8>?
 
-    init(start: UnsafeMutablePointer<UInt8>) {
-        startPtr = start
-        endPtr = start
+    init () {
+        startPtr = nil
+        endPtr = nil
     }
 
-    func append(count: Int = 1) {
-        endPtr = endPtr + count
+//    init(start: UnsafeMutablePointer<UInt8>) {
+//        startPtr = start
+//        endPtr = start
+//    }
+
+//    func setStart(_ start: UnsafeMutablePointer<UInt8>) {
+//        startPtr = start
+//        endPtr = start
+//    }
+
+    func append(current: UnsafeMutablePointer<UInt8>, count: Int = 1) {
+        if startPtr == nil {
+            startPtr = current
+            endPtr = current
+        }
+        endPtr = endPtr! + count
     }
 
-    func prepend(count: Int = 1) {
-        startPtr = startPtr - count
+    func prepend(current: UnsafeMutablePointer<UInt8>, count: Int = 1) {
+        if startPtr == nil {
+            startPtr = current
+            endPtr = current
+        }
+        startPtr = startPtr! - count
     }
 
     func toString() -> String {
-        return String(bytesNoCopy: startPtr, length: endPtr - startPtr, encoding: String.Encoding.utf8, freeWhenDone: false)!
+        if self.isEmpty {
+            return ""
+        } else {
+            return String(bytesNoCopy: startPtr!, length: endPtr! - startPtr!, encoding: String.Encoding.utf8, freeWhenDone: false)!
+        }
     }
 
     var stringByEncodingHTML: String {
-        return ""
+        if self.isEmpty {
+            return ""
+        } else {
+            return String(bytesNoCopy: startPtr!, length: endPtr! - startPtr!, encoding: String.Encoding.utf8, freeWhenDone: false)!.stringByEncodingHTML
+        }
     }
 
     var isEmpty: Bool {
-        return endPtr == startPtr
+        return startPtr == nil || endPtr == startPtr
     }
 
     var count: Int {
-        return endPtr - startPtr
+        if startPtr != nil {
+            return endPtr! - startPtr!
+        } else {
+            return 0
+        }
     }
 
     static func == (lhs: BBString, rhs: BBString) -> Bool {
-        return lhs.startPtr == rhs.startPtr && lhs.endPtr == rhs.endPtr
+        if lhs.startPtr != nil {
+            if lhs.count == rhs.count {
+                for i in (0..<lhs.count) {
+                    if (lhs.startPtr! + i).pointee != (rhs.startPtr! + i).pointee {
+                        return false
+                    }
+                }
+                return true
+            } else {
+                return false
+            }
+        } else {
+            return false
+        }
     }
 }
 
@@ -163,6 +206,8 @@ class DOMNode {
         self.tagType = tag.1
         self.tagDescription = tag.2
         self.parent = parent
+        self.value = BBString()
+        self.attr = BBString()
     }
 
     func setTag(tag: TagInfo) {
@@ -290,7 +335,7 @@ func contentParser(g: inout USIterator, worker: Worker) -> Parser? {
                 }
             } else {
                 if worker.currentNode.type == .code {
-                    newNode.value.append()
+                    newNode.value.append(current: g.currentPointer())
                 } else {
                     worker.error = BBCodeError.unclosedTag(unclosedTagDetail(unclosedNode: worker.currentNode))
                     return nil
@@ -308,10 +353,10 @@ func contentParser(g: inout USIterator, worker: Worker) -> Parser? {
                 } else if !worker.currentNode.paired {
                     return tag_parser
                 } else {
-                    newNode.value.append()
+                    newNode.value.append(current: g.currentPointer())
                 }
             } else { // <content>
-                newNode.value.append()
+                newNode.value.append(current: g.currentPointer())
             }
         }
     }
@@ -335,7 +380,7 @@ func tagParser(g: inout USIterator, worker: Worker) -> Parser? {
                 return tag_close_parser
             } else {
                 // illegal syntax, may be an unpaired closing tag, treat it as plain text
-                restoreNodeToPlain(node: newNode, worker: worker)
+                restoreNodeToPlain(node: newNode, worker: worker, g: g)
                 return content_parser
             }
         } else if c == 61 { // "="
@@ -350,7 +395,7 @@ func tagParser(g: inout USIterator, worker: Worker) -> Parser? {
                     }
                 }
             }
-            restoreNodeToPlain(node: newNode, worker: worker)
+            restoreNodeToPlain(node: newNode, worker: worker, g: g)
             return content_parser
         } else if c == 93 { // "]"
             //<tag> ::= <opening_tag_1> | <opening_tag> <content> <closing_tag>
@@ -368,20 +413,20 @@ func tagParser(g: inout USIterator, worker: Worker) -> Parser? {
                     }
                 }
             }
-            restoreNodeToPlain(node: newNode, worker: worker)
+            restoreNodeToPlain(node: newNode, worker: worker, g: g)
             return content_parser
         } else if c == 91 { // "["
             // illegal syntax, treat it as plain text, and restart tag parsing from this new position
             newNode.setTag(tag: worker.tagManager.getInfo(type: .plain)!)
             //newNode.value.insert(Character(UnicodeScalar(91)), at: newNode.value.startIndex)
-            newNode.value.prepend()
+            newNode.value.prepend(current: g.currentPointer())
             return tag_parser
         } else {
             if index < tagNameMaxLength {
-                newNode.value.append()
+                newNode.value.append(current: g.currentPointer())
             } else {
                 // no such tag
-                restoreNodeToPlain(node: newNode, worker: worker)
+                restoreNodeToPlain(node: newNode, worker: worker, g: g)
                 return content_parser
             }
         }
@@ -401,7 +446,7 @@ func attrParser(g: inout USIterator, worker: Worker) -> Parser? {
             worker.error = BBCodeError.unfinishedAttr(unclosedTagDetail(unclosedNode: worker.currentNode))
             return nil
         } else {
-            worker.currentNode.attr.append()
+            worker.currentNode.attr.append(current: g.currentPointer())
         }
     }
 
@@ -413,7 +458,7 @@ func attrParser(g: inout USIterator, worker: Worker) -> Parser? {
 func tagClosingParser(g: inout USIterator, worker: Worker) -> Parser? {
     // <tag_name> <tag_end>
     //var tagName: String = ""
-    let tagName: BBString = BBString(start: g.currentPointer())
+    let tagName: BBString = BBString()
     while let c = g.next() {
         if c == 93 { // "]"
             if !tagName.isEmpty && tagName == worker.currentNode.value {
@@ -438,7 +483,8 @@ func tagClosingParser(g: inout USIterator, worker: Worker) -> Parser? {
 
                 let newNode: DOMNode = newDOMNode(type: .plain, parent: worker.currentNode, tagManager: worker.tagManager)
                 //newNode.value = "[/" + tagName + "]"
-                newNode.value = BBString(start: g.currentPointer())
+                newNode.value.prepend(current: g.currentPointer(), count: 2 + tagName.count)
+                newNode.value.append(current: g.currentPointer())
                 worker.currentNode.children.append(newNode)
 
                 return content_parser
@@ -447,20 +493,19 @@ func tagClosingParser(g: inout USIterator, worker: Worker) -> Parser? {
             // illegal syntax, treat it as plain text, and restart tag parsing from this new position
             let newNode: DOMNode = newDOMNode(type: .plain, parent: worker.currentNode, tagManager: worker.tagManager)
             //newNode.value = "[/" + tagName
-            newNode.value.prepend(count: 2)
-            newNode.value.append(count: tagName.count)
+            newNode.value.prepend(current: g.currentPointer(), count: 2 + tagName.count)
             worker.currentNode.children.append(newNode)
             return tag_parser
         } else if c == 61 { // "="
             // illegal syntax, treat it as plain text
             let newNode: DOMNode = newDOMNode(type: .plain, parent: worker.currentNode, tagManager: worker.tagManager)
             //newNode.value = "[/" + tagName + "="
-            newNode.value.prepend(count: 2)
-            newNode.value.append(count: tagName.count + 1)
+            newNode.value.prepend(current: g.currentPointer(), count: 2 + tagName.count)
+            newNode.value.append(current: g.currentPointer())
             worker.currentNode.children.append(newNode)
             return content_parser
         } else {
-            tagName.append()
+            tagName.append(current: g.currentPointer())
         }
     }
 
@@ -468,10 +513,10 @@ func tagClosingParser(g: inout USIterator, worker: Worker) -> Parser? {
     return nil
 }
 
-func restoreNodeToPlain(node: DOMNode, worker: Worker) {
+func restoreNodeToPlain(node: DOMNode, worker: Worker, g: USIterator) {
     node.setTag(tag: worker.tagManager.getInfo(type: .plain)!)
-    node.value.prepend()
-    node.value.append()
+    node.value.prepend(current: g.currentPointer())
+    node.value.append(current: g.currentPointer())
 }
 
 func handleNewlineAndParagraph(node: DOMNode, tagManager: TagManager) {
@@ -866,6 +911,7 @@ public class BBCode {
                                                         valid = true
                                                     } else {
                                                         valid = false
+                                                        break
                                                     }
                                                 }
                                             }
@@ -873,7 +919,7 @@ public class BBCode {
                                     }
 
                                     if valid {
-                                        html = "<span style=\"color: \(n.attr)\">\(n.renderChildren(args))</span>"
+                                        html = "<span style=\"color: \(n.attr.toString())\">\(n.renderChildren(args))</span>"
                                     } else {
                                         html = "[color=\(n.escapedAttr)]\(n.renderChildren(args))[/color]"
                                     }
@@ -963,7 +1009,7 @@ public class BBCode {
 }
 
 
-extension Substring {
+extension String {
     /// Returns the String with all special HTML characters encoded.
     var stringByEncodingHTML: String {
         var ret = ""

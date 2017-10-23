@@ -87,7 +87,7 @@ class BBCodeTests: XCTestCase {
             let bbcode = BBCode()
             do {
                 for _ in 1...100 {
-                    _ = try bbcode.parse(bbcode: performanceTestString)
+                    _ = try bbcode.parse(bbcode: self.performanceTestString)
                 }
             } catch {
 
@@ -100,7 +100,7 @@ class BBCodeTests: XCTestCase {
             let bbcode = BBCode()
             do {
                 for _ in 1...100 {
-                    _ = try bbcode.validate(bbcode: performanceTestString)
+                    _ = try bbcode.validate(bbcode: self.performanceTestString)
                 }
             } catch {
 
@@ -110,7 +110,7 @@ class BBCodeTests: XCTestCase {
 
     func testString4() {
         self.measure {
-            let str = performanceTestString
+            let str = self.performanceTestString
             for _ in 1...10000 {
                 var g = str.unicodeScalars.makeIterator()
                 var value: [Unicode.Scalar] = []
@@ -123,7 +123,7 @@ class BBCodeTests: XCTestCase {
 
     func testString5() {
         self.measure {
-            let str = performanceTestString
+            let str = self.performanceTestString
             for _ in 1...10000 {
                 var value = ""
                 let view = str.unicodeScalars
@@ -140,7 +140,7 @@ class BBCodeTests: XCTestCase {
 
     func testString6() {
         self.measure {
-            let str = performanceTestString
+            let str = self.performanceTestString
             var data = str.data(using: String.Encoding.utf8)!
             var value = Array<UInt8>()
             for _ in 1...10000 {
@@ -153,7 +153,7 @@ class BBCodeTests: XCTestCase {
 
     func testString7() {
         self.measure {
-            let str = performanceTestString
+            let str = self.performanceTestString
             var data = str.data(using: String.Encoding.utf8)!
             let buff = UnsafeMutablePointer<UInt8>.allocate(capacity: data.count)
             for _ in 1...10000 {

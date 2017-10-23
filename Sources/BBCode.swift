@@ -790,10 +790,11 @@ public class BBCode {
                                             var g = n.attr.unicodeScalars.makeIterator()
                                             if g.next() == "#" {
                                                 while let c = g.next() {
-                                                    if (c >= UnicodeScalar("0") && c <= UnicodeScalar("9")) || (c >= UnicodeScalar("a") && c <= UnicodeScalar("z")) || (c >= UnicodeScalar("A") && c <= UnicodeScalar("Z")) {
+                                                    if (c >= UnicodeScalar("0") && c <= UnicodeScalar("9")) || (c >= UnicodeScalar("a") && c <= UnicodeScalar("f")) || (c >= UnicodeScalar("A") && c <= UnicodeScalar("F")) {
                                                         valid = true
                                                     } else {
                                                         valid = false
+                                                        break
                                                     }
                                                 }
                                             }

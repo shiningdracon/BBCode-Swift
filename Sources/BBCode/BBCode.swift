@@ -153,7 +153,7 @@ class TagManager {
 
 
         tmptags.sort(by: {a, b in
-            if a.0.characters.count > b.0.characters.count {
+            if a.0.count > b.0.count {
                 return true
             } else {
                 return false
